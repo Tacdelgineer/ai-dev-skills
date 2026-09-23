@@ -47,8 +47,6 @@ if(new URLSearchParams(location.search).has('record')){window.__VCLOCK__=0;windo
 const qs=new URLSearchParams(location.search);
 const stage=document.getElementById('stage'),ctx=stage.getContext('2d',{alpha:false});
 const FPS=12,BOIL_EVERY=4,COUNT=2.4,NOTE_IN=.5;       // seconds: the count, then the note fades in
-// At stat-card size the core's 8 (an O with a bar) reads as a 0. Here it is two stacked loops.
-GLYPHS['8']='103041423313020110|133344453616050413';
 const NOW=()=>window.__VCLOCK__!=null?window.__VCLOCK__:performance.now();
 let W=1,H=1,dpr=1,started=NOW(),lastFrame=-1,CARD=null,DATA=null;
 

@@ -18,6 +18,14 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
   winning before it wins.
 - **One room = one idea.** The camera moves slowly.
 - **Numbers on screen come only from results files.** Title cards carry no numbers.
+- **8 and 0 must never be confused.** Charts, scoreboards and stat cards use lettering where
+  the two are clearly different at phone size: the core's 0 carries a slash and its 8 is two
+  loops pinched at the waist. An 8 drawn as an O with a bar reads as a 0 (hedgefly's $891 read
+  as $091), so never bring that one back.
+- **Check every screenshot before publishing it, in both wide and vertical.** No room may be
+  nearly empty: retake it at a fuller moment or swap in a room that isn't already shown. No
+  number may overlap another number or label, run off its board or card, or be cut by a line,
+  a lamp or the frame edge: fix the layout on the page, never the number, then retake.
 - **Credit** the riso-rooms and hand-drawn-canvas-animation skills (IshaanKalra2103, MIT)
   and Kevin Ngo's inspiration.
 
@@ -88,8 +96,7 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
   A–Z, 0–9 and `$ % - + . , : / ( ) * · ' ! ?` with the same wobbly pen (`text`,
   `textCentred`; `{wall:'i'}` or `{wall:'j'}` shears it onto a wall). Lettering hangs *down*
   from its anchor by its own size, and a room is 32 px per unit of height: space wall lines
-  by at least the text size plus a few pixels. At stat-card size the core's 8 reads as a 0;
-  the stat card swaps in a two-loop 8. Page chrome (buttons, key legend) uses a system
+  by at least the text size plus a few pixels. Page chrome (buttons, key legend) uses a system
   monospace stack and is hidden in every take.
 
 ### Canvas, pen and the room template
@@ -220,7 +227,9 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
   nothing can close the script early), and refuses a script containing `</script`. The result
   opens by double-click and runs unchanged on GitHub Pages. hedgefly's was about 830 KB.
 - **Check before publishing:** `render.mjs --smoke --page visuals/dist/index.html`, press
-  through director mode once, and grep the file for hostnames, usernames and home paths.
+  through director mode once, grep the file for hostnames, usernames and home paths, and
+  look at every room and board wide and vertical for empty rooms and crowded numbers (see
+  the contract above).
 - **Publish, only when the prompt allows it.** The `gh-pages` branch holds one file,
   `index.html`, kept in its own worktree:
 
