@@ -10,7 +10,7 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
 
 ## Contract: the look
 
-- **Neon risograph, isometric rooms:** a dark navy "paper" background, halftone grain, and
+- **Neon risograph, isometric rooms:** a near-black "paper" background (#07070b), halftone grain, and
   hand-drawn canvas animation.
 - **Colors:** two groups being compared get two equal-weight colors (hedgefly: cyan for
   real, magenta for fake), with gold reserved for the hero or champion.
