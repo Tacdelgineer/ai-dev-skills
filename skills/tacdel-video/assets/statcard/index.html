@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stat cards</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#07070b}
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+</style>
+</head><body>
+<canvas id="stage" aria-label="Stat cards: each number counts up, then holds"></canvas>
+<script src="../lib/riso-core.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   STAT CARDS — one number or two per card, counted up from zero and then held, over the curve
+   or bars they came from. About 6 s each when filmed.
+
+   Every number, label and curve is read from stats.json, which the project's exporter writes
+   from its results files. This page holds no project logic and types no number, so a card can
+   only ever show what the results say. Shape of stats.json:
+
+     {"contract_version": 1,
+      "source": "FROM results/summary.json · RUN 2026-09-20-A",          footer, small, every card
+      "cards": [
+        {"id": "S1", "name": "treated_vs_control", "kicker": "THE FINAL TEST",
+         "nums": [{"value": 1123.45, "format": "dollars", "ink": "cyan",    "label": "TREATED"},
+                  {"value": 987.1,   "format": "dollars", "ink": "magenta", "label": "CONTROL"}],
+         "note": "SHOWN AFTER THE COUNT",
+         "curves": [{"ink": "cyan", "points": [1000, 1012.5]}, {"ink": "magenta", "points": [1000, 991]}]},
+        {"id": "S2", "name": "trades", "nums": [...], "bars": [{"ink": "cyan", "values": [3, 5, 4]}]},
+        {"id": "S3", "name": "end_card", "end": true, "lines": ["WALK THROUGH", "IT YOURSELF"],
+         "url": "OWNER.GITHUB.IO/REPO"}]}
+
+   formats: dollars ($1,234, or $4.56 under ten), dollars2 ($1,234.56), whole (1,234),
+            pct (12%), pct1 (12.3%), dec1 (1.2), dec2 (1.23), times (2.4X)
+   inks:    cyan and magenta for the two compared subjects, gold for the hero, ghost for everyone
+            else. Both numbers on a card are set at the same size, whatever their values.
+   type:    the stencil alphabet draws A-Z, 0-9 and $ % - + . , : / ( ) * · ' ! ? only.
+
+     ?card=S1    open on a card          ?vertical   1080x1920 framing
+     ?record     the renderer drives the clock        ?data=...   another stats file
+   Click, or press the arrow keys, to step through the cards by hand.
+   Filmed with: node scripts/video/render.mjs --cards --page visuals/statcard/index.html --data results/stats.json
+   ===================================================================== */
+if(new URLSearchParams(location.search).has('record')){window.__VCLOCK__=0;window.__VCLOCK_DRIVEN__=true}
+const qs=new URLSearchParams(location.search);
+const stage=document.getElementById('stage'),ctx=stage.getContext('2d',{alpha:false});
+const FPS=12,BOIL_EVERY=4,COUNT=2.4,NOTE_IN=.5;       // seconds: the count, then the note fades in
+// At stat-card size the core's 8 (an O with a bar) reads as a 0. Here it is two stacked loops.
+GLYPHS['8']='103041423313020110|133344453616050413';
+const NOW=()=>window.__VCLOCK__!=null?window.__VCLOCK__:performance.now();
+let W=1,H=1,dpr=1,started=NOW(),lastFrame=-1,CARD=null,DATA=null;
+
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  stage.width=Math.round(W*dpr);stage.height=Math.round(H*dpr);lastFrame=-1}
+addEventListener('resize',resize);
+
+/* a figure keeps the precision it is shown at while it counts */
+const n0=v=>Math.round(v).toLocaleString('en-US');
+const FORMATS={
+  dollars:v=>v<10?'$'+v.toFixed(2):'$'+n0(v),
+  dollars2:v=>'$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
+  whole:n0, pct:v=>Math.round(v)+'%', pct1:v=>v.toFixed(1)+'%',
+  dec1:v=>v.toFixed(1), dec2:v=>v.toFixed(2), times:v=>v.toFixed(1)+'X',
+};
+const fmtOf=x=>FORMATS[x.format]||FORMATS.whole;
+const byId=id=>DATA.cards.find(c=>c.id===id);
+
+/* the curves the numbers end on, drawn as they count, on one shared scale */
+function curvePlate(pen,curves,u,box){
+  const all=curves.flatMap(c=>c.points),lo=Math.min(...all),hi=Math.max(...all),span=Math.max(hi-lo,1e-9);
+  for(const c of curves){
+    const k=Math.max(2,Math.round(c.points.length*u)),pts=[];
+    for(let i=0;i<k;i++)pts.push([box.x+i/Math.max(1,c.points.length-1)*box.w,box.y+box.h-(c.points[i]-lo)/span*box.h]);
+    pen.line(pts,c.ink,2.2,{tone:.3,amp:.5});
+    const [x,y]=pts[pts.length-1];pen.dot(x,y,4,c.ink,.45);
+  }
+}
+function barPlate(pen,sets,u,box){
+  const top=Math.max(...sets.flatMap(s=>s.values)),rows=sets.reduce((a,s)=>a+s.values.length,0),step=box.h/rows;
+  let r=0;
+  for(const s of sets)for(const v of s.values){const y=box.y+(r++ +.5)*step;
+    pen.line([[box.x,y],[box.x+box.w*u*v/Math.max(top,1e-9),y]],s.ink,Math.max(2,step*.5),{tone:.2,amp:.4})}
+}
+function swarm(pen,t){                                   // the end card's characters, drifting
+  const R=stream('stat-swarm');
+  for(let k=0;k<26;k++){
+    const bx=rand(R,-2,16),by=rand(R,-10,14),sp=rand(R,.12,.4),ph=rand(R,0,TAU);
+    pen.fly(bx+Math.sin(t*sp+ph)*2.4,by+Math.cos(t*sp*.8+ph)*1.6,0,{t,pose:'hover',ink:k%5?'slate':'cyan',tone:k%5?.4:.7,
+      scale:rand(R,.8,1.7),facing:Math.cos(t*sp+ph)>=0?1:-1,phase:ph,noShadow:true,glowStrength:.5});
+  }
+}
+
+const zoomFor=vertical=>Math.min(W/980,H/(vertical?1500:760))*(vertical?1.18:1);
+const fitSize=(strs,maxW,cap,gap)=>Math.min(cap,...strs.map(s=>maxW/(Math.max(1,s.length)*.62*(1+gap))));
+
+function drawNumbers(pen,card,t,vertical){
+  const u=ease(clamp(t/COUNT,0,1)),note=clamp((t-COUNT)/NOTE_IN,0,1),CAP=.83,gap=.22;
+  const half=vertical?400:650,top=vertical?-660:-352,nums=card.nums||[];
+  if(card.kicker){
+    textCentred(pen,card.kicker,[0,top],fitSize([card.kicker],2*half-60,vertical?24:22,.42),{ink:'ghost',tone:.7,w:1.6,gap:.42});
+    pen.line([[-170,top+40],[170,top+40]],'amber',3,{tone:.75,amp:1.2});
+  }
+  // the plate gets a band of its own under the labels, so no line crosses a number
+  const plate=vertical?{x:-half+20,y:40,w:2*half-40,h:340}:{x:-half+30,y:-5,w:2*half-60,h:195};
+  if(card.curves)curvePlate(pen,card.curves,u,plate);
+  if(card.bars)barPlate(pen,card.bars,u,plate);
+  // one size for every number on the card, so neither side of a comparison is set bigger
+  const finals=nums.map(x=>fmtOf(x)(x.value)),colW=vertical||nums.length<2?2*half-60:half-100;
+  const size=fitSize(finals,colW,vertical?190:170,gap);
+  nums.forEach((x,k)=>{
+    const cx=vertical||nums.length<2?0:(k?1:-1)*half/2,y=vertical?(k?-250:-560):-268;
+    pen.halo(cx,y+size*CAP/2,size*.95,x.ink||'ghost',.05);
+    textCentred(pen,fmtOf(x)(x.value*u),[cx,y],size,{ink:x.ink||'ghost',w:Math.max(4,size/26),gap,tone:1});
+    if(x.label)textCentred(pen,x.label,[cx,y+size*1.2+14],fitSize([x.label],colW,vertical?24:20,.42),{ink:x.ink||'ghost',tone:.8,w:1.5,gap:.42});
+  });
+  if(card.note&&note>0)
+    textCentred(pen,card.note,[0,vertical?460:238],fitSize([card.note],2*half-60,30,.4),{ink:'ghost',tone:.95*note,w:2.4,gap:.4});
+  if(DATA.source)textCentred(pen,DATA.source,[0,vertical?640:335],fitSize([DATA.source],2*half-40,vertical?15:14,.42),{ink:'ghost',tone:.45,w:1,gap:.42});
+}
+
+function drawEnd(pen,card,t,vertical){
+  swarm(pen,t);ctx.globalCompositeOperation='source-over';ctx.setLineDash([]);
+  const lines=card.lines||[],size=fitSize(lines,vertical?720:1200,112,.26),y0=vertical?-190:-150;
+  lines.forEach((s,k)=>textCentred(pen,s,[0,y0+k*size*1.2],size,{ink:'ghost',w:5,gap:.26,tone:.92}));
+  if(!card.url)return;
+  const y=y0+lines.length*size*1.2+30,us=fitSize([card.url],vertical?760:1100,vertical?40:48,.3);
+  pen.line([[-340,y],[340,y]],'gold',3,{tone:.8,amp:1.4});
+  pen.halo(0,y+60,190+Math.sin(t*.9)*16,'gold',.05);
+  textCentred(pen,card.url,[0,y+40],us,{ink:'gold',w:3,gap:.3,tone:1});
+}
+
+function draw(frameNo){
+  const t=frameNo/FPS,boil=Math.floor(frameNo/BOIL_EVERY),vertical=document.body.classList.contains('vertical');
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=PAPER_CSS;ctx.fillRect(0,0,stage.width,stage.height);
+  const zoom=zoomFor(vertical);
+  ctx.setTransform(dpr*zoom,0,0,dpr*zoom,dpr*W/2,dpr*H/2);
+  const pen=makePen(ctx,{ox:-330,oy:vertical?-150:-190,boil}),card=DATA&&byId(CARD);
+  if(card){try{(card.end?drawEnd:drawNumbers)(pen,card,t,vertical)}catch(e){console.error(CARD,e)}}
+  ctx.globalCompositeOperation='source-over';ctx.setLineDash([]);
+  const ax=-W/2/zoom,ay=-H/2/zoom;
+  if(DATA&&DATA.fake)text(pen,'FAKE DATA',[ax+30,ay+30],18,{ink:'amber',w:1.8,tone:.9});
+  ctx.globalCompositeOperation='screen';ctx.fillStyle=grain(ctx);ctx.fillRect(ax,ay,W/zoom,H/zoom);
+  ctx.globalCompositeOperation='source-over';
+}
+function stepFrame(){
+  if(innerWidth!==W||innerHeight!==H)resize();
+  const f=Math.floor((NOW()-started)/1000*FPS);
+  if(f!==lastFrame){draw(f);lastFrame=f}
+}
+function tick(){if(!window.__VCLOCK_DRIVEN__)requestAnimationFrame(tick);stepFrame()}
+function show(id){CARD=id;started=NOW();lastFrame=-1}
+function nextCard(d){const ids=DATA.cards.map(c=>c.id),i=ids.indexOf(CARD);show(ids[(i+d+ids.length)%ids.length])}
+
+window.__world={ready:false,
+  step(ms){window.__VCLOCK__=(window.__VCLOCK__||0)+ms;stepFrame()},
+  card(id){show(id)},
+  cards:()=>DATA?DATA.cards.map(c=>({id:c.id,name:c.name||c.id})):[]};
+
+async function load(){
+  if(window.__RUN__)return window.__RUN__;
+  const r=await fetch(qs.get('data')||'stats.json',{cache:'no-store'});
+  if(!r.ok)throw new Error('stats.json: '+r.status);return r.json();
+}
+if(qs.has('vertical'))document.body.classList.add('vertical');
+load().then(d=>{
+  if(d.contract_version!==1||!Array.isArray(d.cards))throw new Error('stats file: expected contract_version 1 with a cards array');
+  DATA=d;CARD=byId(qs.get('card'))?qs.get('card'):d.cards[0].id;
+  stage.onclick=()=>nextCard(1);
+  addEventListener('keydown',e=>{if(e.key==='ArrowRight')nextCard(1);else if(e.key==='ArrowLeft')nextCard(-1)});
+  resize();started=NOW();window.__world.ready=true;
+  if(!window.__VCLOCK_DRIVEN__)requestAnimationFrame(tick);else stepFrame();
+}).catch(e=>{console.error(e);document.body.style.color='#d8dcff';document.body.textContent=String(e)});
+</script>
+</body></html>

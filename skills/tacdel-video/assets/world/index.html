@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Starter world</title>
+<style>
+  :root{--paper:#07070b;--ghost:#d8dcff;--slate:#5b6cff;--gold:#ffc93c;
+        --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--paper);overscroll-behavior:none}
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+  #stage.drag{cursor:grabbing}
+  #ui{position:fixed;left:0;right:0;bottom:0;padding:9px 14px 11px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+      font:12px/1.5 var(--mono);color:var(--ghost);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(to top,rgba(7,7,11,.96),rgba(7,7,11,.7));border-top:1px solid rgba(91,108,255,.45);user-select:none}
+  #ui button{font:inherit;letter-spacing:inherit;text-transform:inherit;color:var(--ghost);
+      background:transparent;border:1px solid rgba(216,220,255,.45);padding:3px 10px;cursor:pointer}
+  #ui button.on{color:var(--gold);border-color:var(--gold)}
+  #scrub{flex:1 1 200px;min-width:140px;accent-color:var(--gold)}
+  #legend{position:fixed;right:14px;top:14px;display:grid;grid-template-columns:auto auto;gap:2px 12px;
+      padding:10px 13px;font:11px/1.45 var(--mono);color:var(--ghost);letter-spacing:.06em;text-transform:uppercase;
+      pointer-events:none;background:rgba(7,7,11,.82);border:1px solid rgba(91,108,255,.4)}
+  #legend b{color:var(--gold);font-weight:400;white-space:nowrap} #legend span{opacity:.72}
+  body.vertical #legend{font-size:10px;top:10px;right:10px}
+  body.clean .ui{display:none!important}
+</style>
+</head><body>
+<canvas id="stage" aria-label="An isometric neon riso world"></canvas>
+<div id="legend" class="ui" aria-hidden="true"></div>
+<div id="ui" class="ui">
+  <button id="play">pause</button>
+  <input id="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="stage">
+  <span id="label">stage 0</span>
+  <span id="rooms"></span>
+  <span id="stat"></span>
+</div>
+<script src="../lib/riso-core.js"></script>
+<script src="../lib/director.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   STARTER WORLD — two rooms, one data file, filmable and explorable.
+
+   Copy assets/ into the project's visuals/ folder, then edit this file: keep sections 1, 3 and
+   4 as they are, replace the rooms in section 2 with the project's own. Every figure on a wall
+   comes out of data.json (the project's exporter writes it); nothing is typed into the page.
+
+     ?room=curve   open on a room          ?stage=3   open on a stage of the data
+     ?clean        hide the UI             ?vertical  1080x1920 framing (bigger legend offsets)
+     ?record       the renderer drives the clock (implies ?clean)
+     ?still        no idle camera drift    ?data=...  a different data file
+   ===================================================================== */
+
+/* --- 1. THE CLOCK ------------------------------------------------------------------------
+   Read time from NOW(), never from performance.now(). With ?record the renderer owns the clock
+   (window.__VCLOCK__, stepped by __world.step), so a take is exact and repeatable. Live, time is
+   accumulated at RATE, which is how Shift gives director mode its slow motion. */
+if(new URLSearchParams(location.search).has('record')){window.__VCLOCK__=0;window.__VCLOCK_DRIVEN__=true}
+const DRIVEN=()=>!!window.__VCLOCK_DRIVEN__;
+let SOFT=0,softLast=null,RATE=1;
+function advance(){const now=performance.now();if(softLast===null)softLast=now;SOFT+=Math.min(100,now-softLast)*RATE;softLast=now}
+const NOW=()=>window.__VCLOCK__!=null?window.__VCLOCK__:SOFT;
+
+const qs=new URLSearchParams(location.search);
+const stage=document.getElementById('stage'),ctx=stage.getContext('2d',{alpha:false});
+const ui={play:document.getElementById('play'),scrub:document.getElementById('scrub'),label:document.getElementById('label'),
+          rooms:document.getElementById('rooms'),stat:document.getElementById('stat')};
+const FPS=12,BOIL_EVERY=4,SLOT=13,MIN_Z=.15,MAX_Z=6,MS_PER_STAGE=2200;
+let W=1,H=1,dpr=1,lastFrame=-1,lastCam='',started=0,stageStart=0,idleSince=0;
+let RUN=null,STAGE=0,PLAYING=true;
+const cam={x:0,y:0,zoom:1};let camBase={x:0,y:0,zoom:1},tween=null;
+
+/* --- 2. THE ROOMS -------------------------------------------------------------------------
+   A room is a cutaway box on a (col,row) grid with a draw(pen, t, R): pen is the drawing
+   surface, t is seconds, R a seeded random for this room so its scatter never re-rolls.
+   Furnish first (desk, lamp, plant, a character), then wire the numbers. */
+const ROOMS=[];
+const room=def=>ROOMS.push({w:10,d:10,h:3,col:0,row:0,...def});
+const F=()=>RUN.frames[clamp(STAGE,0,RUN.frames.length-1)];
+/* Inks are handed out by a subject's position in the data, never by its name, so the page works
+   for any project's nouns. The first two are equally bright: they are the pair being compared. */
+const PALETTE=['cyan','magenta'];
+const INK=name=>PALETTE[RUN.subjects.indexOf(name)]||'ghost';
+const fmt=v=>Number(v).toLocaleString('en-US',{maximumFractionDigits:1});
+
+room({id:'floor',name:'the floor',col:0,row:0,w:9,d:8,h:3.2,
+  style:{floor:['slate',.3],wall:['slate',.12],wall2:['slate',.15],planks:true},
+  draw(pen,t,R){
+    const f=F();
+    // lettering hangs DOWN from its anchor by its own size (32 px per unit of height), so space lines by it
+    text(pen,'THE FLOOR',pen.wallQuad('i',.6,2.9,.01,.01,.06)[0],15,{wall:'i',w:1.3,tone:.9});
+    text(pen,'TWO GROUPS, ONE TASK',pen.wallQuad('i',.6,2.05,.01,.01,.06)[0],7,{wall:'i',tone:.55});
+
+    /* the wall board: every figure read straight out of the data */
+    pen.shape(pen.wallQuad('i',4.1,.45,4.3,2.25,.05),['slate',.1],{w:1.1});
+    RUN.subjects.forEach((name,k)=>{
+      const s=f.subjects[name],ink=INK(name),z=2.45-k*1.05;
+      text(pen,name.toUpperCase(),pen.wallQuad('i',4.35,z,.01,.01,.1)[0],9,{wall:'i',ink,w:1.1});
+      text(pen,fmt(s.median)+' MEDIAN · '+s.alive+' OF '+(s.alive+s.gone)+' LEFT',pen.wallQuad('i',4.35,z-.5,.01,.01,.1)[0],6,{wall:'i',ink,tone:.8});
+    });
+
+    /* one desk per member, dark once it is gone; both groups drawn at the same size and tone */
+    RUN.subjects.forEach((name,k)=>{
+      const s=f.subjects[name],n=s.alive+s.gone,ink=INK(name);
+      for(let q=0;q<n;q++){
+        const i=.9+(q%7)*.62,j=1.3+k*2.6+Math.floor(q/7)*.82,out=q>=s.alive;
+        pen.box(i,j,0,.44,.3,.22,{ink:'slate',tone:out?.15:.32,w:.6});
+        if(!out)pen.fly(i+.2,j+.42,.22,{t,pose:'sit',ink,tone:.8,scale:.6,phase:q*.37,noShadow:true});
+      }
+    });
+
+    /* the furniture, so the room is a place and not a slide */
+    pen.rug(5.4,5.4,3,2.2,{ink:'slate',tone:.12,border:'slate'});
+    pen.table(5.8,5.7,2,1.3,.75,{ink:'slate',tone:.32});
+    pen.lamp(8.2,1.2,{t});
+    pen.plant(8.3,7,0,{t,size:1.05});
+    pen.fly(7.2,6.4,0,{t,pose:'hover',ink:'slate',scale:1.15,facing:-1,phase:2.1});
+  }});
+
+room({id:'curve',name:'the curve',col:1,row:0,w:8,d:7,h:3.2,
+  style:{floor:['slate',.28],wall:['slate',.12],wall2:['slate',.15],planks:false},
+  draw(pen,t,R){
+    const p=pen.p;
+    text(pen,'THE CURVE',pen.wallQuad('j',5.9,2.9,.01,.01,.08)[0],14,{wall:'j',w:1.3});
+    text(pen,'EVERY STAGE SO FAR',pen.wallQuad('j',5.9,2.08,.01,.01,.08)[0],6.5,{wall:'j',tone:.6});
+    pen.shape(pen.wallQuad('i',.5,.8,7,2.1,.05),['slate',.1],{w:1.2});
+    /* frames.slice(0, STAGE+1) is the trick: the line draws itself on camera as the stage advances.
+       One shared scale for both lines, so neither is flattered by its own axis. */
+    const seen=RUN.frames.slice(0,STAGE+1);
+    const all=RUN.frames.flatMap(f=>RUN.subjects.map(s=>f.subjects[s].median)).concat(RUN.start_value);
+    const lo=Math.min(...all),hi=Math.max(...all),span=Math.max(hi-lo,1e-9);
+    const X=k=>.7+(RUN.frames.length<2?0:k/(RUN.frames.length-1))*6.2,Z=v=>1+(v-lo)/span*1.7,At=(u,z)=>p(u,.07,z);
+    pen.line([At(.6,Z(RUN.start_value)),At(7.1,Z(RUN.start_value))],'ghost',.7,{tone:.32,dash:[4,4],amp:0});
+    for(const name of RUN.subjects){
+      const pts=seen.map((f,k)=>At(X(k),Z(f.subjects[name].median)));
+      if(pts.length>1)pen.line(pts,INK(name),1.7,{amp:.2});else if(pts.length)pen.dot(...pts[0],2.4,INK(name),1);
+    }
+    pen.lamp(1,2.1,{t});
+    pen.fly(6,5.2,0,{t,pose:'stand',ink:'slate',scale:1.2,facing:-1,phase:.9});
+  }});
+
+/* --- 3. THE RUNTIME -----------------------------------------------------------------------
+   Layout, camera (tween, idle drift, drag, wheel), the 12 fps boil and the draw loop. */
+function layout(){
+  for(const r of ROOMS){
+    r.oi=r.col*SLOT;r.oj=r.row*SLOT;[r.ox,r.oy]=iso(r.oi,r.oj);
+    const pts=[];for(const a of[-.5,r.w+.3])for(const b of[-.5,r.d+.3])for(const z of[-1,r.h+.6])pts.push(iso(r.oi+a,r.oj+b,z));
+    r.bounds=[Math.min(...pts.map(q=>q[0])),Math.min(...pts.map(q=>q[1])),Math.max(...pts.map(q=>q[0])),Math.max(...pts.map(q=>q[1]))];
+  }
+}
+const ORDER=()=>ROOMS.map(r=>r.id);                       // film and keyboard order: as declared
+const drawOrder=()=>[...ROOMS].sort((a,b)=>(a.oi+a.oj)-(b.oi+b.oj));   // back to front
+const framing=b=>({x:(b[0]+b[2])/2,y:(b[1]+b[3])/2,zoom:clamp(Math.min(W/(b[2]-b[0]),H/(b[3]-b[1]))*.92,MIN_Z,MAX_Z)});
+const allBounds=()=>ROOMS.reduce((a,r)=>[Math.min(a[0],r.bounds[0]),Math.min(a[1],r.bounds[1]),
+  Math.max(a[2],r.bounds[2]),Math.max(a[3],r.bounds[3])],[1e9,1e9,-1e9,-1e9]);
+const roomById=id=>ROOMS.find(r=>r.id===id);
+const toWorld=(sx,sy)=>({x:(sx-W/2)/cam.zoom+cam.x,y:(sy-H/2)/cam.zoom+cam.y});
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(2,devicePixelRatio||1);stage.width=Math.round(W*dpr);stage.height=Math.round(H*dpr);lastCam=''}
+function jump(target,ms){if(ms<=0){Object.assign(cam,target);camBase={...target};tween=null;lastCam=''}
+  else tween={from:{...cam},to:target,start:NOW(),ms}}
+let HERE=null;
+function goToRoom(id,ms=1400){const r=roomById(id);if(!r)return;HERE=id;jump(framing(r.bounds),ms);paint()}
+function building(ms=2200){HERE=null;jump(framing(allBounds()),ms);paint()}
+// a slow, never-repeating wander once the viewer leaves the camera alone
+const drift=s=>({x:Math.sin(s*.13)*16+Math.sin(s*.047)*9,y:Math.sin(s*.09+1.3)*9,z:1+Math.sin(s*.061)*.035});
+// a hand on the camera: fold the current drift into the base so nothing jumps, then stop drifting
+function touch(){camBase={x:cam.x,y:cam.y,zoom:cam.zoom};tween=null;idleSince=NOW()}
+const panBy=(dx,dy)=>{touch();camBase.x+=dx/cam.zoom;camBase.y+=dy/cam.zoom};
+const zoomBy=f=>{touch();camBase.zoom=clamp(camBase.zoom*f,MIN_Z,MAX_Z)};
+
+let drag=null;
+stage.addEventListener('pointerdown',e=>{touch();stage.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY};stage.classList.add('drag')});
+stage.addEventListener('pointermove',e=>{if(!drag)return;panBy(drag.x-e.clientX,drag.y-e.clientY);drag={x:e.clientX,y:e.clientY}});
+const up=()=>{drag=null;stage.classList.remove('drag')};
+stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+stage.addEventListener('wheel',e=>{e.preventDefault();touch();const a=toWorld(e.clientX,e.clientY);
+  camBase.zoom=clamp(camBase.zoom*Math.exp(-clamp(e.deltaY,-300,300)*.0015),MIN_Z,MAX_Z);
+  camBase.x=a.x-(e.clientX-W/2)/camBase.zoom;camBase.y=a.y-(e.clientY-H/2)/camBase.zoom},{passive:false});
+stage.addEventListener('dblclick',e=>{const w=toWorld(e.clientX,e.clientY),b=r=>r.bounds;
+  const r=ROOMS.find(r=>w.x>=b(r)[0]&&w.x<=b(r)[2]&&w.y>=b(r)[1]&&w.y<=b(r)[3]);if(r)goToRoom(r.id)});
+
+function draw(frameNo){
+  const t=frameNo/FPS,boil=Math.floor(frameNo/BOIL_EVERY),z=cam.zoom;
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=PAPER_CSS;ctx.fillRect(0,0,stage.width,stage.height);
+  ctx.setTransform(dpr*z,0,0,dpr*z,dpr*(W/2-cam.x*z),dpr*(H/2-cam.y*z));
+  const a=toWorld(0,0),b=toWorld(W,H);
+  for(const r of drawOrder()){
+    if(r.bounds[2]<a.x||r.bounds[0]>b.x||r.bounds[3]<a.y||r.bounds[1]>b.y)continue;   // off camera
+    const pen=makePen(ctx,{ox:r.ox,oy:r.oy,boil});
+    // a room that throws comes out empty instead of stopping the world; the smoke check catches it
+    try{if(r.shell!==false)pen.shell(r);r.draw&&r.draw(pen,t,stream(r.id))}catch(e){console.error('room '+r.id,e)}
+    ctx.globalCompositeOperation='source-over';ctx.setLineDash([]);
+  }
+  // fake data says so on the canvas itself, so a fake frame can never pass for a real one in a cut
+  if(RUN.fake)text(makePen(ctx,{boil}),'FAKE DATA',[a.x+24/z,a.y+24/z],16/z,{ink:'amber',w:1.6/z,tone:.9});
+  // the grain goes on last, over everything, like the paper it was printed on
+  ctx.globalCompositeOperation='screen';ctx.fillStyle=grain(ctx);ctx.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);
+  ctx.globalCompositeOperation='source-over';
+}
+
+function setStage(s){if(!RUN)return;STAGE=clamp(Math.round(s),0,RUN.frames.length-1);paint()}
+function paint(){
+  if(!RUN)return;const f=F();
+  ui.scrub.value=STAGE;ui.label.textContent=`stage ${f.stage} / ${RUN.frames.length-1}`;
+  ui.stat.textContent=RUN.subjects.map(n=>`${n} ${fmt(f.subjects[n].median)}`).join('  |  ')+(RUN.fake?'   ·   FAKE DATA':'');
+  ui.play.textContent=PLAYING?'pause':'play';
+  for(const b of ui.rooms.children)b.classList.toggle('on',b.dataset.room===HERE);
+  lastCam='';
+}
+function tickOnce(now){if(PLAYING&&RUN&&now-stageStart>=MS_PER_STAGE){stageStart=now;setStage(STAGE+1>=RUN.frames.length?0:STAGE+1)}}
+function stepFrame(){
+  const now=NOW();
+  if(innerWidth!==W||innerHeight!==H)resize();
+  if(tween){
+    const u=clamp((now-tween.start)/tween.ms,0,1),e=ease(u);
+    cam.x=lerp(tween.from.x,tween.to.x,e);cam.y=lerp(tween.from.y,tween.to.y,e);cam.zoom=lerp(tween.from.zoom,tween.to.zoom,e);
+    if(u>=1){camBase={...tween.to};tween=null}
+  }else{
+    const d=!qs.has('still')&&now-idleSince>3500?drift(now/1000):{x:0,y:0,z:1};
+    cam.x=camBase.x+d.x;cam.y=camBase.y+d.y;cam.zoom=camBase.zoom*d.z;
+  }
+  const f=Math.floor((now-started)/1000*FPS);
+  const key=`${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)},${W},${H},${STAGE}`;
+  if(f!==lastFrame||key!==lastCam){draw(f);lastFrame=f;lastCam=key}
+}
+function tick(){if(!DRIVEN()){requestAnimationFrame(tick);advance()}tickOnce(NOW());stepFrame()}
+
+/* --- 4. THE CONTROL SURFACE ---------------------------------------------------------------
+   What scripts/render.mjs and scripts/stills.mjs drive. A page without it cannot be filmed.
+   Add a method whenever a shot needs to set some state the page owns (open a door, pick a fly). */
+window.__world={ready:false,
+  step(ms){window.__VCLOCK__=(window.__VCLOCK__||0)+ms;tickOnce(NOW());stepFrame()},   // advance the clock, draw one frame
+  shot(kind,arg,ms=0){if(kind==='room')goToRoom(arg,ms);else if(kind==='building')building(ms)},
+  play(on){PLAYING=!!on;stageStart=NOW()},
+  stage(s){setStage(s)},
+  stages:()=>RUN?RUN.frames.length:0,
+  cam(x,y,zoom){tween=null;camBase={x,y,zoom:clamp(zoom,MIN_Z,MAX_Z)};Object.assign(cam,camBase);lastCam=''},
+  frame(id){const r=id?roomById(id):null;return id?(r?framing(r.bounds):null):framing(allBounds())},
+  spot(id,i,j,z=0){const r=roomById(id);if(!r)return null;const [x,y]=iso(r.oi+i,r.oj+j,z);return {x,y}},
+  rooms:()=>ORDER()};
+
+async function loadRun(){
+  // inlined by the renderer and the single-file build; fetched when served over http
+  if(window.__RUN__)return window.__RUN__;
+  const r=await fetch(qs.get('data')||'data.json',{cache:'no-store'});
+  if(!r.ok)throw new Error(`${r.status} fetching the data file`);
+  return r.json();
+}
+async function boot(){
+  if(qs.has('vertical'))document.body.classList.add('vertical');
+  if(qs.has('clean')||qs.has('record'))document.body.classList.add('clean');
+  try{RUN=await loadRun()}catch(e){console.error(e);ui.label.textContent='no data: serve this over http, or build the single file';return}
+  if(RUN.contract_version!==1){ui.label.textContent=`data contract v${RUN.contract_version}; this page reads v1`;return}
+  resize();layout();
+  ui.scrub.max=RUN.frames.length-1;
+  STAGE=clamp(+(qs.get('stage')||0),0,RUN.frames.length-1);
+  PLAYING=!qs.has('record')&&qs.get('play')!=='0';
+  ui.play.onclick=()=>{PLAYING=!PLAYING;stageStart=NOW();paint()};
+  ui.scrub.oninput=()=>{PLAYING=false;setStage(+ui.scrub.value)};
+  for(const r of ROOMS){const b=document.createElement('button');b.textContent=r.name||r.id;b.dataset.room=r.id;
+    b.onclick=()=>goToRoom(r.id);ui.rooms.appendChild(b)}
+  installDirector({rooms:ORDER,current:()=>HERE,goRoom:id=>goToRoom(id,700),pan:panBy,zoom:zoomBy,rate:r=>{RATE=r},
+    legend:document.getElementById('legend'),
+    extra:[['B','the whole building',()=>building()],['SPACE','play / pause',null]]});
+  addEventListener('keydown',e=>{if(e.key===' '&&e.target.tagName!=='BUTTON'){ui.play.onclick();e.preventDefault()}});
+  if(roomById(qs.get('room')))goToRoom(qs.get('room'),0);else building(0);
+  paint();
+  if(qs.has('record'))idleSince=-1e9;                 // a take drifts from its first frame
+  started=NOW();stageStart=NOW();window.__world.ready=true;
+  if(!DRIVEN())requestAnimationFrame(tick);else stepFrame();
+}
+boot();
+</script>
+</body></html>
