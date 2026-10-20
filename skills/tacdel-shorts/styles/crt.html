@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STROT: pay once, run free</title>
+<!--
+  SHORT D · "Ask the big AI once, run it free" · retro terminal / CRT · 1080x1920 · 47.3 s
+  Timed to ElevenLabs take "Chosen take (synced to video)" in flow "tacdel · STROT VO".
+  RUN   Double-click. Put that take next to this file as voice.mp3 and press Space: it plays in sync.
+  KEYS  Space play/pause · R restart · Left/Right scene · H hide controls · F fullscreen
+  URL   ?clean hides controls · ?nocaps hides captions · ?t=12 freezes a moment
+  FACTS github.com/strot-ai/Project-STROT README (author-reported benchmarks). Routing rules shown are an illustrative example.
+-->
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#b9b2a6;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  canvas{height:min(calc(100vh - 72px),calc((100vw - 24px)*16/9));width:auto;display:block}
+  #hud{width:min(calc((100vh - 72px)*9/16),calc(100vw - 24px));display:flex;flex-direction:column;gap:7px}
+  #bar{position:relative;height:6px;background:#272727;border-radius:3px;cursor:pointer}
+  #fill{position:absolute;left:0;top:0;bottom:0;background:#e9e2d5;border-radius:3px}
+  .tick{position:absolute;top:-3px;width:2px;height:12px;background:#555}
+  #row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden}
+  .clean #hud{display:none} .clean canvas{height:min(100vh,100vw*16/9)}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"><div id="bar"><div id="fill"></div></div><div id="row"><span id="info"></span><span>Space · R · ← → · H</span></div></div>
+<script>
+const TITLE = 'D · STROT · CRT';
+const CAPS = [
+  ['What if you paid the big AI once,', 0, 2.16], ['and then never again?', 2.2, 3.36], ['Normally, you pay a model', 4.0, 5.36], ['for every single decision.', 5.44, 7.16],
+  ['A thousand tickets, a thousand bills.', 7.36, 9.72], ['An open-source project called STROT flips that.', 10.0, 13.44], ['You write the rule in plain English,', 13.92, 15.68],
+  ['and a big model compiles it, once.', 15.72, 18.16], ['After that, every decision', 18.72, 20.4], ['runs on a small local model.', 20.48, 22.4], ['About 60 milliseconds,', 22.64, 24.24],
+  ['zero API calls, zero cost per ticket.', 24.32, 27.12], ['On a routing test of 398 records,', 27.6, 30.32], ['the project measured 92.5% accuracy,', 30.36, 33.52],
+  ['versus 74.8 for the same model without compiling.', 33.64, 36.96], ['My test: compiled,', 37.52, 39.24], ['versus paying a big model for every ticket.', 39.36, 41.84],
+  ['Accuracy, next to the bill.', 42.08, 43.84], ['Pay once. Run free.', 44.32, 46.16],
+];
+const SCENES = [0, 4.0, 10.0, 18.72, 27.6, 37.52, 44.32], DUR = 47.3;
+// re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const W = 1080, H = 1920;
+const SANS = '"Inter","Helvetica Neue","Segoe UI",Arial,sans-serif', MONO = '"DejaVu Sans Mono",Menlo,Consolas,"Courier New",monospace';
+
+/* ---------- helpers ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3), eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const sceneAt = t => { let i = 0; while (i < SCENES.length - 1 && t >= SCENES[i + 1]) i++; return i; };
+let T = 0;
+
+/* ---------- CRT: low-res phosphor screen, then glow, scanlines and curved glass ---------- */
+const G = '#4dff86', GD = '#1f8a45', GH = '#d4ffe0', BGC = '#03120a';
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const BW = 360, BH = 640, buf = mk(BW, BH), b = buf.getContext('2d'), blm = mk(90, 160), bl = blm.getContext('2d'), comp = mk(W, H), cc = comp.getContext('2d');
+const SCAN = (() => { const s = mk(1, 3), g = s.getContext('2d'); g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, 2, 1, 1); return cc.createPattern(s, 'repeat'); })();
+function tx(s, x, y, size = 12, col = G, o = {}) {
+  b.font = `${o.wt || 400} ${size}px ${MONO}`; b.textAlign = o.align || 'left'; b.textBaseline = 'alphabetic';
+  const w = b.measureText(s).width, x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  if (o.inv) { b.fillStyle = col; b.fillRect(x0 - 3, y - size * .86, w + 6, size * 1.1); b.fillStyle = BGC; b.textAlign = 'left'; b.fillText(s, x0, y); } else { b.fillStyle = col; b.fillText(s, x, y); }
+  return x0 + w; }
+const typed = (s, t, t0, cps = 40) => s.slice(0, clamp(Math.floor((t - t0) * cps), 0, s.length));
+function cursor(x, y, size = 12) { if ((T * 2.6) % 1 < .55) { b.fillStyle = G; b.fillRect(x + 1, y - size * .82, size * .58, size); } }
+const pad = (n, k = 2) => String(n).padStart(k, '0');
+function statusBar(i) { tx('STROT DEMO · tty1', 14, 22, 11, GD); tx(`[${i + 1}/7]`, 346, 22, 11, GD, { align: 'right' }); b.fillStyle = GD; b.fillRect(14, 30, 332, 1); b.fillRect(14, 452, 332, 1); }
+function bigType(lines, t, t0, cps, y0, size, lh) { let left = Math.floor((t - t0) * cps), cx = 18, cy = y0;
+  lines.forEach((l, i) => { const s = l.s, part = s.slice(0, clamp(left, 0, s.length)); left -= s.length; if (!part) return; cy = y0 + i * lh;
+    cx = tx(part, 18, cy, l.size || size, l.col || GH, { wt: 700, inv: l.inv && part.length === s.length }); });
+  cursor(cx + 4, cy, size); }
+
+/* ---------- scenes (drawn in screen pixels, 360 x 640) ---------- */
+function s1(t) {
+  tx(typed('> strot --demo', t, 0, 40), 18, 62, 12, G);
+  bigType([{ s: 'PAY THE BIG AI' }, { s: 'ONCE.', inv: true, col: G }, { s: 'THEN NEVER', size: 30 }, { s: 'AGAIN?', size: 30 }], t, .25, 14, 190, 34, 48);
+  if (t > 2.7) tx('...right?', 18, 400, 12, GD);
+}
+function s2(t) { // pay per decision: a thousand tickets, a thousand bills
+  tx('MODE: PAY PER DECISION', 18, 62, 12, GH, { wt: 700 });
+  const rate = 14, n = Math.floor((t - 4.2) * rate);
+  b.save(); b.beginPath(); b.rect(14, 76, 332, 200); b.clip();
+  for (let i = 0; i < 12; i++) { const k = n - i; if (k < 0) break; const y = 266 - i * 17;
+    tx(`ticket ${pad(400 + k, 4)} -> paid model`, 18, y, 11, i ? GD : G); tx('$', 330, y, 12, G, { wt: 700 }); }
+  b.restore();
+  const shown = Math.min(1000, Math.floor(clamp((t - 7.4) / 1.4) * 1000));
+  if (t > 7.4) { tx(`${shown.toLocaleString('en-US').padStart(5, ' ')} TICKETS`, 18, 330, 26, GH, { wt: 700 }); }
+  if (t > 8.6) tx(`${shown.toLocaleString('en-US').padStart(5, ' ')} BILLS`, 18, 378, 26, G, { wt: 700, inv: true });
+}
+function s3(t) { // STROT: write the rule in plain English, a big model compiles it once
+  if (t > 11.45) { tx(' STROT ', 18, 92, 48, G, { wt: 700, inv: true }); tx('open-source · MIT', 18, 116, 11, GD); }
+  if (t > 13.85) { b.strokeStyle = G; b.lineWidth = 1; b.strokeRect(18.5, 130.5, 322, 112); b.fillStyle = G; b.fillRect(18, 130, 323, 13); tx('rules.txt', 24, 140, 10, BGC, { wt: 700 });
+    const R = ['refund requests  -> billing', 'crash reports    -> engineering', 'not sure?        -> abstain'];
+    let left = Math.floor((t - 14.0) * 42); R.forEach((r, i) => { const p = r.slice(0, clamp(left, 0, r.length)); left -= r.length; tx(p, 28, 168 + i * 22, 12, i === 2 ? GH : G); });
+    tx('(example rule)', 340, 256, 9, GD, { align: 'right' }); }
+  if (t > 16.4) { tx(typed('> strot compile rules.txt', t, 16.45, 50), 18, 290, 12, GH);
+    const p = clamp((t - 16.9) / .9), n = 20; tx(`[${'#'.repeat(Math.round(p * n))}${'.'.repeat(n - Math.round(p * n))}] big model`, 18, 314, 12, G); }
+  if (t > 17.7) { tx(' COMPILED ONCE ', 18, 362, 24, G, { wt: 700, inv: true }); tx('-> small frozen router', 18, 392, 12, GH); }
+}
+function s4(t) { // every decision runs locally: ~60 ms, 0 API calls, $0 per ticket
+  tx('MODE: COMPILED · LOCAL', 18, 62, 12, GH, { wt: 700 });
+  const dest = ['billing', 'engineering', 'billing', 'sales', 'engineering', 'billing', 'ABSTAIN'], rate = 16, n = Math.floor((t - 18.8) * rate);
+  b.save(); b.beginPath(); b.rect(14, 76, 332, 170); b.clip();
+  for (let i = 0; i < 10; i++) { const k = n - i; if (k < 0) break; const y = 236 - i * 17, d = dest[k % 7];
+    tx(`ticket ${pad(900 + k, 4)} -> ${d}`, 18, y, 11, d === 'ABSTAIN' ? GH : i ? GD : G); tx(d === 'ABSTAIN' ? 'unsure' : 'ok', 340, y, 11, G, { align: 'right' }); }
+  b.restore();
+  const rows = [['MODEL', '144M · local CPU', 21.0], ['TIME', '~60 ms / decision', 22.9], ['API', '0 calls', 24.3], ['COST', '$0 / ticket', 25.8]];
+  rows.forEach(([k, v, at], i) => { if (t < at) return; const y = 290 + i * 36; tx(k, 18, y, 14, GD, { wt: 700 }); tx(v, 96, y, 18, i >= 2 ? GH : G, { wt: 700, inv: i >= 2 && t - at < .6 }); });
+}
+function s5(t) { // 92.5% vs 74.8%, same model, 398 records
+  if (t > 28.5) tx('ROUTING TEST · 398 RECORDS', 18, 70, 13, GH, { wt: 700 });
+  const bar = (label, v, at, y) => { if (t < at) return; const p = eo((t - at) / .8), n = Math.round(v / 100 * 26 * p);
+    tx(label, 18, y, 13, GH, { wt: 700 }); tx('█'.repeat(n) + '░'.repeat(26 - n), 18, y + 26, 13, G); tx(`${(v * p).toFixed(1)}%`, 18, y + 64, 30, G, { wt: 700 }); };
+  bar('COMPILED', 92.5, 31.2, 120); bar('NOT COMPILED', 74.8, 33.85, 240);
+  if (t > 35.3) { tx('same 144M model · project-reported', 18, 372, 11, GD); tx('bars start at zero', 18, 390, 11, GD); }
+}
+function s6(t) { // my test
+  if (t > 37.6) tx(' MY TEST ', 18, 84, 40, G, { wt: 700, inv: true });
+  const col = (x, title, sub, at) => { if (t < at) return; b.strokeStyle = G; b.lineWidth = 1; b.strokeRect(x + .5, 120.5, 156, 250); b.fillStyle = G; b.fillRect(x, 120, 157, 40);
+    tx(title, x + 8, 136, 11, BGC, { wt: 700 }); tx(sub, x + 8, 152, 11, BGC, { wt: 700 });
+    if (t > 42.0) { tx('ACCURACY', x + 10, 206, 12, GD, { wt: 700 }); tx((T * 2) % 1 < .6 ? '?' : '', x + 10, 246, 34, GH, { wt: 700 }); }
+    if (t > 43.6) { tx('BILL', x + 10, 296, 12, GD, { wt: 700 }); tx((T * 2 + .3) % 1 < .6 ? '?' : '', x + 10, 336, 34, GH, { wt: 700 }); } };
+  col(18, 'A: COMPILED', 'ONCE', 38.75); col(186, 'B: BIG MODEL', 'PER TICKET', 39.7);
+  if (t > 42.0) tx('> running next...', 18, 410, 12, G);
+}
+function s7(t) {
+  bigType([{ s: 'PAY ONCE.', inv: true, col: G }, { s: 'RUN FREE.' }], t, 44.3, 12, 230, 40, 60);
+  if (t > 45.4) tx('tacdel // follow for the test', 18, 380, 12, GD);
+}
+const FN = [s1, s2, s3, s4, s5, s6, s7];
+
+/* ---------- captions (white text, dark pill), drawn over the glass ---------- */
+const CAP_ON = !new URLSearchParams(location.search).has('nocaps');
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.85)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+function draw(traw) {
+  const t = warp(traw); T = t; const i = sceneAt(t), lt = t - SCENES[i];
+  b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, BW, BH); b.globalAlpha = 1; statusBar(i); FN[i](t);
+  cc.globalCompositeOperation = 'source-over'; cc.globalAlpha = 1; cc.fillStyle = BGC; cc.fillRect(0, 0, W, H);
+  bl.clearRect(0, 0, 90, 160); bl.imageSmoothingEnabled = true; bl.drawImage(buf, 0, 0, 90, 160);
+  cc.globalCompositeOperation = 'lighter'; cc.imageSmoothingEnabled = true; cc.globalAlpha = .75; cc.drawImage(blm, 0, 0, W, H);
+  cc.globalAlpha = 1; cc.imageSmoothingEnabled = false; cc.drawImage(buf, 0, 0, W, H);
+  cc.globalCompositeOperation = 'source-over'; cc.fillStyle = SCAN; cc.fillRect(0, 0, W, H);
+  const by = ((t * .42) % 1.25) * H - 240, g = cc.createLinearGradient(0, by, 0, by + 300);
+  g.addColorStop(0, 'rgba(110,255,150,0)'); g.addColorStop(.5, 'rgba(110,255,150,.06)'); g.addColorStop(1, 'rgba(110,255,150,0)'); cc.fillStyle = g; cc.fillRect(0, by, W, 300);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const on = traw < .3 ? eo(traw / .3) : traw > DUR - .35 ? 1 - eio((traw - (DUR - .35)) / .3) : 1, sy = Math.max(.003, on), glitch = lt < .12 && i > 0, flick = .94 + rnd(Math.floor(traw * 60)) * .06;
+  ctx.save(); ctx.translate(0, H / 2); ctx.scale(1, sy); ctx.translate(0, -H / 2); ctx.globalAlpha = flick;
+  for (let y = 0; y < H; y += 6) { const ny = (y + 3 - H / 2) / (H / 2), w = W * (1 - .045 * ny * ny), jx = glitch && rnd(y * .01 + Math.floor(t * 60)) > .7 ? (rnd(y + t) - .5) * 60 : 0;
+    ctx.drawImage(comp, 0, y, W, 6, (W - w) / 2 + jx, y, w, 6); }
+  ctx.restore();
+  if (on < .98) { ctx.fillStyle = `rgba(220,255,230,${(1 - on) * .9})`; ctx.fillRect(W * .1 * (1 - on), H / 2 - 3, W - W * .2 * (1 - on), 6); }
+  const v = ctx.createRadialGradient(540, 960, 520, 540, 960, 1200); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.75)'); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  const gl = ctx.createLinearGradient(0, 0, W, H * .6); gl.addColorStop(0, 'rgba(255,255,255,.05)'); gl.addColorStop(.35, 'rgba(255,255,255,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H);
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.roundRect(26, 26, W - 52, H - 52, 90); ctx.fillStyle = '#050605'; ctx.fill('evenodd');
+  if (on > .98) captions(t);
+}
+
+/* ---------- player + optional voice.mp3 in sync ---------- */
+const q = new URLSearchParams(location.search); if (q.has('clean')) document.body.classList.add('clean');
+let t = q.has('t') ? clamp(+q.get('t'), 0, DUR - .001) : 0, playing = !q.has('t'), prev = null;
+const au = new Audio('voice.mp3'); let auOK = false; au.addEventListener('canplay', () => { auOK = true; }); au.addEventListener('error', () => { auOK = false; });
+const bar = document.getElementById('bar'), fillEl = document.getElementById('fill'), info = document.getElementById('info');
+SCENES.slice(1).forEach(s => { const e = document.createElement('i'); e.className = 'tick'; e.style.left = (s / DUR * 100) + '%'; bar.appendChild(e); });
+function syncAudio() { if (!auOK) return; if (playing) { if (au.paused) { au.currentTime = t; au.play().catch(() => {}); } else if (Math.abs(au.currentTime - t) > .15) au.currentTime = t; } else if (!au.paused) au.pause(); }
+function frame(now) {
+  if (playing && prev !== null) { t += Math.min(.1, (now - prev) / 1000); if (t >= DUR) { t = 0; if (auOK) au.currentTime = 0; } }
+  prev = now; draw(t); syncAudio(); fillEl.style.width = (t / DUR * 100) + '%';
+  info.textContent = `${TITLE} · ${t.toFixed(1)} / ${DUR}s${auOK ? ' · voice.mp3 ✓' : ' · no voice.mp3'}${playing ? '' : ' · paused'}`;
+  requestAnimationFrame(frame);
+}
+addEventListener('keydown', e => { const k = e.key.toLowerCase(), i = sceneAt(t);
+  if (k === ' ') { playing = !playing; e.preventDefault(); } else if (k === 'r') { t = 0; playing = true; if (auOK) au.currentTime = 0; }
+  else if (k === 'arrowright') t = SCENES[Math.min(SCENES.length - 1, i + 1)]; else if (k === 'arrowleft') t = SCENES[t - SCENES[i] > .3 ? i : Math.max(0, i - 1)];
+  else if (k === 'h') document.body.classList.toggle('clean');
+  else if (k === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+bar.onclick = e => { const r = bar.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width) * DUR * .9999; };
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { t = s; playing = false; draw(t); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

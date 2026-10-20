@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents that think silently</title>
+<!--
+  SHORT B · "Your AI agent pays to think out loud" · paper-cut collage style · 1080x1920 · 42.8 s
+  Timed to ElevenLabs take "Chosen take (synced to video)" in flow "tacdel · Hybrid agents VO".
+  RUN   Double-click. Put that take next to this file as voice.mp3 and press Space: it plays in sync.
+  KEYS  Space play/pause · R restart · Left/Right scene · H hide controls · F fullscreen
+  URL   ?clean hides controls · ?nocaps hides captions · ?t=12 freezes a moment
+  FACTS "Hybrid Reasoning Agents", Zou et al., arXiv 2610.18861 (Oct 13 2026), abstract numbers; code: github.com/togethercomputer/HybridAgent.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#b9b2a6;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  canvas{height:min(calc(100vh - 72px),calc((100vw - 24px)*16/9));width:auto;display:block}
+  #hud{width:min(calc((100vh - 72px)*9/16),calc(100vw - 24px));display:flex;flex-direction:column;gap:7px}
+  #bar{position:relative;height:6px;background:#272727;border-radius:3px;cursor:pointer}
+  #fill{position:absolute;left:0;top:0;bottom:0;background:#e9e2d5;border-radius:3px}
+  .tick{position:absolute;top:-3px;width:2px;height:12px;background:#555}
+  #row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden}
+  .clean #hud{display:none} .clean canvas{height:min(100vh,100vw*16/9)}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"><div id="bar"><div id="fill"></div></div><div id="row"><span id="info"></span><span>Space · R · ← → · H</span></div></div>
+<script>
+const TITLE = 'B · Hybrid agents · paper-cut';
+const CAPS = [
+  ['Your AI agent thinks out loud,', 0, 2.24], ['and you pay for every word.', 2.32, 4.24], ['Before it acts,', 4.48, 5.52], ['it writes out its reasoning,', 5.6, 6.96],
+  ['and every one of those tokens', 7.08, 8.48], ['lands on your bill.', 8.64, 10.0], ['A new paper, Hybrid Reasoning Agents,', 10.04, 12.64],
+  ['lets the agent think silently,', 12.72, 14.52], ['inside the model,', 14.56, 15.76], ['and use words only for tool calls and answers.', 15.84, 18.88],
+  ['Across 11 benchmarks:', 19.08, 20.72], ['about 10% better,', 20.88, 22.32], ['35 to 55% fewer tokens,', 22.4, 25.28], ['and 2.7 to 3.7× cheaper.', 25.4, 28.64],
+  ['Those are the authors’ numbers,', 28.72, 30.08], ['and the code and models are public.', 30.16, 32.32], ['So I’m testing it on my DGX Spark.', 32.44, 35.04],
+  ['Thinking out loud, versus thinking silently,', 35.28, 37.84], ['with the token meter running.', 37.92, 39.52], ['Half the receipt might be optional.', 39.64, 41.52],
+];
+const SCENES = [0, 4.48, 10.04, 19.08, 28.72, 32.44, 39.64], DUR = 42.8;
+// re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const W = 1080, H = 1920;
+const SANS = '"Inter","Helvetica Neue","Segoe UI",Arial,sans-serif', SERIF = 'Georgia,"DejaVu Serif","Times New Roman",serif', TYPE = '"Courier New",Courier,"Liberation Mono",monospace';
+
+/* ---------- helpers ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3), eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.7; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const sceneAt = t => { let i = 0; while (i < SCENES.length - 1 && t >= SCENES[i + 1]) i++; return i; };
+let T = 0, Q = 0;
+const stepT = x => Math.floor(x * 12) / 12;         // motion on 12 fps "twos"
+const jit = (k, amt) => (rnd(k * 7.3 + Q * 1.91) - .5) * amt;
+
+/* ---------- paper: palette, texture, pieces ---------- */
+const C = { bg: '#e9dec7', cream: '#fbf6ea', kraft: '#c69a66', red: '#d4452a', teal: '#1f6a73', mustard: '#e5ad36', ink: '#221d19', news: '#d8d1c1', pink: '#eaa596', shadow: 'rgba(72,46,20,.30)' };
+function noiseCanvas(lo, hi) { const s = document.createElement('canvas'); s.width = s.height = 256; const g = s.getContext('2d'), im = g.createImageData(256, 256);
+  for (let i = 0; i < im.data.length; i += 4) { const v = lo + Math.random() * (hi - lo); im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } g.putImageData(im, 0, 0); return s; }
+const TEX = ctx.createPattern(noiseCanvas(200, 255), 'repeat');
+const BG = (() => { const s = document.createElement('canvas'); s.width = W; s.height = H; const g = s.getContext('2d');
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'multiply'; g.fillStyle = g.createPattern(noiseCanvas(215, 255), 'repeat'); g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 900; i++) { const x = Math.random() * W, y = Math.random() * H, a = Math.random() * 6.3, l = 6 + Math.random() * 22;
+    g.strokeStyle = Math.random() < .5 ? 'rgba(255,255,255,.35)' : 'rgba(120,90,50,.12)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l, y + Math.sin(a) * l * .3, x + Math.cos(a + .4) * l * 1.6, y + Math.sin(a + .4) * l); g.stroke(); }
+  const v = g.createRadialGradient(540, 960, 600, 540, 960, 1300); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(70,40,10,.22)'); g.fillStyle = v; g.fillRect(0, 0, W, H); return s; })();
+const poly = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); };
+function torn(x, y, w, h, seed, rough = 4, step = 15) { const pts = [], s = seed + (Q % 3) * .013;
+  const edge = (x0, y0, x1, y1, k) => { const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.round(L / step)), nx = -(y1 - y0) / L, ny = (x1 - x0) / L;
+    for (let i = 0; i < n; i++) { const u = i / n, j = (rnd(s * 3.1 + k * 97 + i * 13.7) - .5) * rough * 2; pts.push([x0 + (x1 - x0) * u + nx * j, y0 + (y1 - y0) * u + ny * j]); } };
+  edge(x, y, x + w, y, 1); edge(x + w, y, x + w, y + h, 2); edge(x + w, y + h, x, y + h, 3); edge(x, y + h, x, y, 4); poly(pts); }
+function cutCircle(x, y, r, seed, rough = 2.5) { const pts = [], n = Math.max(14, Math.round(r / 5));
+  for (let i = 0; i < n; i++) { const a = i / n * 6.283, rr = r + (rnd(seed + i * 7.7 + (Q % 3) * .01) - .5) * rough * 2; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); } poly(pts); }
+function piece(path, col, sh = true, edge = false) {
+  if (sh) { ctx.save(); ctx.translate(7, 9); path(); ctx.fillStyle = C.shadow; ctx.fill(); ctx.restore(); }
+  path(); ctx.fillStyle = col; ctx.fill(); ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = TEX; ctx.fill(); ctx.restore();
+  if (edge) { ctx.strokeStyle = 'rgba(255,252,242,.75)'; ctx.lineWidth = 3; ctx.stroke(); } }
+function tape(x, y, w, ang) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang); torn(-w / 2, -17, w, 34, x * .1 + y, 2.5, 9); ctx.fillStyle = 'rgba(243,232,190,.78)'; ctx.fill(); ctx.restore(); }
+function dymo(s, x, y, size = 30, ang = 0, a = 1) { if (a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.rotate(ang); ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(s).width + 44, h = size * 1.55; piece(() => { ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 7); }, '#1c1b1d');
+  ctx.fillStyle = '#000'; ctx.fillText(s, 1.5, 2.5); ctx.fillStyle = '#f2efe8'; ctx.fillText(s, 0, 0); ctx.restore(); }
+function ransom(lines, y0, size, seed, lt, lh = 1.28) {
+  const fonts = [s => `900 ${s}px ${SANS}`, s => `700 ${s * 1.06}px ${SERIF}`, s => `700 ${s * .98}px ${TYPE}`, s => `italic 700 ${s}px ${SERIF}`, s => `700 ${s * .9}px ${SANS}`];
+  const looks = [[C.cream, C.ink], [C.ink, C.cream], [C.red, C.cream], [C.mustard, C.ink], [C.teal, C.cream], [C.news, C.ink], [C.kraft, C.ink], [C.pink, C.ink]];
+  let k = 0;
+  lines.forEach((line, li) => {
+    const chars = [...line.toUpperCase()];
+    const widths = sz => chars.map((ch, i) => { ctx.font = fonts[Math.floor(rnd(seed + i + li * 31) * 5)](sz); return ch === ' ' ? sz * .32 : ctx.measureText(ch).width + sz * .3; });
+    let ws = widths(size), total = ws.reduce((a, b) => a + b + 6, -6); const fit = Math.min(1, 950 / total), sz = size * fit; if (fit < 1) { ws = widths(sz); total = ws.reduce((a, b) => a + b + 6, -6); }
+    let x = 540 - total / 2; const y = y0 + li * size * lh;
+    chars.forEach((ch, i) => { const id = seed + i + li * 31, w = ws[i], cx = x + w / 2; x += w + 6; k++; if (ch === ' ') return;
+      const tIn = stepT(lt - k * .04); if (tIn < 0) return;
+      const sc = lerp(1.45, 1, back(tIn / .25)), rot = (rnd(id * 1.7) - .5) * .22 + (rnd(id + Q) - .5) * .015;
+      const [bg, fg] = looks[Math.floor(rnd(id * 2.3) * looks.length)], hh = sz * 1.18, dy = (rnd(id * 5.1) - .5) * sz * .12;
+      ctx.save(); ctx.translate(cx, y + dy); ctx.rotate(rot); ctx.scale(sc, sc);
+      piece(() => (rnd(id * 3.9) < .5 ? torn(-w / 2, -hh / 2, w, hh, id, 3.5, 12) : (ctx.beginPath(), ctx.rect(-w / 2, -hh / 2, w, hh))), bg);
+      ctx.font = fonts[Math.floor(rnd(id) * 5)](sz); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = fg; ctx.fillText(ch, 0, sz * .05); ctx.restore(); });
+  });
+}
+function stamp(s, x, y, ang, p, size = 54) { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); const sc = lerp(1.8, 1, back(p / .4)); ctx.scale(sc, sc); ctx.globalAlpha *= clamp(p * 3) * .9;
+  ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const w = ctx.measureText(s).width + 56;
+  ctx.strokeStyle = C.red; ctx.lineWidth = 8; ctx.setLineDash([26, 5]); ctx.beginPath(); ctx.roundRect(-w / 2, -size * .9, w, size * 1.8, 14); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.red; ctx.fillText(s, 0, 3); ctx.restore(); }
+// the agent: a paper puppet on a stick
+function pbot(x, y, s, o = {}) { const ph = o.ph || 0;
+  ctx.save(); ctx.translate(x + jit(1 + ph, 4), y + jit(2 + ph, 4)); ctx.scale(s, s); ctx.rotate(jit(3 + ph, .03));
+  piece(() => torn(-10, -60, 20, 330, 5 + ph, 1.5), C.kraft);
+  const arm = sd => { let r = -sd * .25; if (o.wave && sd > 0) r = -2.5 + (Q % 4 < 2 ? .35 : -.25); if (o.point && sd > 0) r = -1.9;
+    ctx.save(); ctx.translate(sd * 62, -142); ctx.rotate(r); piece(() => torn(-12, 0, 24, 92, 40 + sd + ph, 2), C.kraft); ctx.restore(); };
+  arm(-1); arm(1);
+  piece(() => { ctx.beginPath(); ctx.roundRect(-62, -160, 124, 108, 12); }, C.mustard); piece(() => cutCircle(0, -106, 18, 9 + ph), C.red, false);
+  [-1, 1].forEach(sd => { ctx.beginPath(); ctx.arc(sd * 62, -142, 7, 0, 7); ctx.fillStyle = '#8d8579'; ctx.fill(); });
+  piece(() => torn(-6, -352, 12, 60, 7 + ph, 1), C.ink); piece(() => cutCircle(0, -360, 17, 3 + ph), C.red);
+  piece(() => { ctx.beginPath(); ctx.roundRect(-100, -310, 200, 158, 24); }, C.teal); piece(() => { ctx.beginPath(); ctx.roundRect(-74, -290, 148, 112, 20); }, C.cream, false);
+  const blink = (T + ph) % 3.2 < .16;
+  [-1, 1].forEach(sd => { const ex = sd * 34 + (o.look || 0) * 9;
+    if (blink) { ctx.fillStyle = C.ink; ctx.fillRect(ex - 17, -250, 34, 7); } else { ctx.beginPath(); ctx.arc(ex, -248, 16, 0, 7); ctx.fillStyle = C.ink; ctx.fill(); ctx.beginPath(); ctx.arc(ex + 6, -253, 5, 0, 7); ctx.fillStyle = C.cream; ctx.fill(); }
+    ctx.beginPath(); ctx.arc(sd * 58, -214, 9, 0, 7); ctx.fillStyle = C.pink; ctx.fill(); });
+  if (o.talk) { const open = Q % 3 === 0 ? 4 : Q % 3 === 1 ? 14 : 9; ctx.beginPath(); ctx.ellipse(0, -205, 16, open, 0, 0, 7); ctx.fillStyle = C.ink; ctx.fill(); }
+  else { ctx.fillStyle = C.ink; ctx.fillRect(-14, -206, 28, 5); }
+  if (o.think) for (let i = 0; i < 5; i++) { const a = Q * .5 + i * 1.256, r = 34 + (i % 2) * 10; // silent thoughts: glowing dots circling inside the head
+    ctx.beginPath(); ctx.arc(Math.cos(a) * r, -258 + Math.sin(a) * r * .45, 8, 0, 7); ctx.fillStyle = i % 2 ? C.mustard : C.teal; ctx.fill(); }
+  ctx.restore(); }
+function receipt(x, y, w, len, items, seed, hiFrom = 99) { // a till receipt with a torn top and a zigzag bottom
+  const path = () => { ctx.beginPath(); ctx.moveTo(x, y); for (let i = 0; i <= 20; i++) ctx.lineTo(x + w * i / 20, y + (rnd(seed + i) - .5) * 8);
+    for (let i = 20; i >= 0; i--) ctx.lineTo(x + w * i / 20, y + len + (i % 2 ? 14 : 0)); ctx.closePath(); };
+  piece(path, C.cream, true);
+  ctx.save(); path(); ctx.clip(); ctx.font = `700 26px ${TYPE}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  items.forEach((it, i) => { const yy = y + 54 + i * 44; if (yy > y + len - 20) return;
+    if (i >= hiFrom && it.think) { ctx.fillStyle = 'rgba(212,69,42,.32)'; ctx.fillRect(x + 12, yy - 26, w - 24, 34); }
+    ctx.fillStyle = C.ink; ctx.fillText(it.s, x + 20, yy); ctx.fillRect(x + w - 20 - it.c * (w * .32), yy - 9, it.c * (w * .32), 8); });
+  ctx.restore(); }
+const ITEMS = [{ s: 'thinking', c: .9, think: 1 }, { s: 'thinking more', c: .7, think: 1 }, { s: 're-checking', c: .8, think: 1 }, { s: 'thinking again', c: .6, think: 1 },
+  { s: 'tool call', c: .25 }, { s: 'thinking', c: .85, think: 1 }, { s: 'second guess', c: .5, think: 1 }, { s: 'answer', c: .3 }, { s: 'thinking', c: .75, think: 1 }, { s: 'summary', c: .4, think: 1 }];
+
+/* ---------- scenes ---------- */
+const slideIn = (t, t0, dist = 800) => (1 - back(stepT(t - t0) / .4)) * dist * 1.5;
+function s1(lt, t) { // "Your AI agent thinks out loud, and you pay for every word."
+  const words = ['hmm…', 'let me think', 'first,', 'wait —', 'actually…', 'so…', 'hmm', 'let me check'];
+  pbot(300, 1330 + slideIn(t, 0, 900), 1.15, { talk: true, look: 1 });
+  words.forEach((w, i) => { const t0 = .25 + i * .42, u = stepT(t - t0); if (u < 0) return;
+    const x = 360 + u * 260 + (i % 2) * 40, y = 860 - u * 340 - (i % 3) * 30; if (y < 520) return;
+    ctx.save(); ctx.translate(x, y); ctx.rotate((rnd(i) - .5) * .3); ctx.font = `700 44px ${TYPE}`; const ww = ctx.measureText(w).width + 40;
+    piece(() => torn(-ww / 2, -34, ww, 68, 30 + i, 2.5), C.cream, true); ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(w, 0, 2); ctx.restore(); });
+  if (t > .9) receipt(700, 600, 300, Math.min(700, (t - .9) * 300), ITEMS, 11);
+  ransom(['you pay for', 'every word.'], 260, 96, 10, t - 2.45);
+}
+function s2(lt, t) { // the receipt: reasoning tokens land on your bill
+  const len = Math.min(980, 200 + lt * 520);
+  receipt(250, 300 + slideIn(t, 4.48, -500), 580, len, ITEMS, 12, t > 6.4 ? 0 : 99);
+  ctx.save(); ctx.font = `700 34px ${TYPE}`; ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.fillText('* AGENT RECEIPT *', 540, 330 + slideIn(t, 4.48, -500)); ctx.restore();
+  dymo('= REASONING TOKENS', 300, 1180, 30, -.05, eo(stepT(t - 6.5) / .2));
+  dymo('YOU PAID FOR THESE', 560, 1260, 30, .04, eo(stepT(t - 8.24) / .2));
+  stamp('BILL', 820, 980, -.2, (t - 9.2) / .5, 70);
+}
+function s3(lt, t) { // the paper: think silently inside the model, words only for tool calls and answers
+  const cy = 360 + slideIn(t, 10.3, -700);
+  ctx.save(); ctx.translate(540, cy); ctx.rotate(-.025);
+  piece(() => torn(-420, -170, 840, 330, 41, 5, 16), C.news, true, true);
+  ctx.fillStyle = 'rgba(34,29,25,.18)'; for (let i = 0; i < 7; i++) ctx.fillRect(-380, 70 + i * 12, 760 - (i % 3) * 120, 5);
+  ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.font = `700 70px ${SERIF}`; ctx.fillText('Hybrid Reasoning', 0, -60); ctx.fillText('Agents', 0, 18);
+  ctx.font = `700 26px ${TYPE}`; ctx.fillText('arXiv · Oct 13, 2026 · Zou et al.', 0, 62); ctx.restore();
+  tape(150, cy - 170, 110, -.3); tape(930, cy - 170, 110, .3);
+  const think = t > 13.6;
+  pbot(540, 1350 + slideIn(t, 12.6, 900), 1.2, { think, talk: false, look: 0 });
+  dymo('THINKS INSIDE THE MODEL', 540, 640, 30, -.02, eo(stepT(t - 14.56) / .2));
+  dymo('TOOL CALL', 820, 900, 32, .08, eo(stepT(t - 17.2) / .2));
+  dymo('ANSWER', 830, 1000, 32, -.05, eo(stepT(t - 18.12) / .2));
+  if (t > 17.2) { ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(640, 1130); ctx.quadraticCurveTo(700, 980, 740, 930); ctx.stroke(); ctx.setLineDash([]); }
+}
+function statCard(x, y, big, small, col, fg, seed, ang, p) { if (p <= 0) return; ctx.save(); ctx.translate(x + (1 - back(p)) * (seed % 2 ? 900 : -900), y); ctx.rotate(ang);
+  piece(() => torn(-380, -120, 760, 240, seed, 4), col, true); ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = `900 112px ${SANS}`; ctx.fillText(big, -340, -22); ctx.font = `700 38px ${TYPE}`; ctx.fillText(small, -336, 70);
+  tape(-300, -120, 100, -.4); tape(300, -120, 100, .4); ctx.restore(); }
+function s4(lt, t) { // the numbers
+  dymo('11 BENCHMARKS · 3 MODEL SIZES', 540, 300, 32, -.02, eo(stepT(t - 19.36) / .2));
+  statCard(540, 530, '≈10%', 'BETTER', C.mustard, C.ink, 51, -.03, stepT(t - 21.0) / .35);
+  statCard(540, 820, '35–55%', 'FEWER TOKENS', C.teal, C.cream, 52, .025, stepT(t - 22.4) / .35);
+  statCard(540, 1110, '2.7–3.7×', 'CHEAPER', C.red, C.cream, 53, -.02, stepT(t - 25.56) / .35);
+}
+function s5(lt, t) { // authors' numbers; code + models are public
+  ctx.save(); ctx.translate(540, 560); ctx.scale(.62, .62); ctx.translate(-540, -820);
+  statCard(540, 530, '≈10%', 'BETTER', C.mustard, C.ink, 51, -.03, 1); statCard(540, 820, '35–55%', 'FEWER TOKENS', C.teal, C.cream, 52, .025, 1); statCard(540, 1110, '2.7–3.7×', 'CHEAPER', C.red, C.cream, 53, -.02, 1);
+  ctx.restore();
+  stamp("AUTHORS' NUMBERS", 540, 560, -.12, (t - 29.24) / .5, 60);
+  const fy = 1110 + slideIn(t, 30.4, 700);
+  ctx.save(); ctx.translate(540, fy); ctx.rotate(.02);
+  piece(() => { ctx.beginPath(); ctx.moveTo(-360, -150); ctx.lineTo(-140, -150); ctx.lineTo(-110, -190); ctx.lineTo(60, -190); ctx.lineTo(90, -150); ctx.lineTo(360, -150); ctx.lineTo(360, 170); ctx.lineTo(-360, 170); ctx.closePath(); }, C.kraft, true);
+  ctx.fillStyle = C.ink; ctx.font = `700 40px ${TYPE}`; ctx.textAlign = 'center'; ctx.fillText('CODE + MODELS', 0, -70); ctx.font = `900 54px ${SANS}`; ctx.fillText('PUBLIC', 0, -10); ctx.restore();
+  ['8B', '14B'].forEach((m, i) => { const p = stepT(t - 31.5 - i * .15); if (p < 0) return; ctx.save(); ctx.translate(430 + i * 220, fy + 90); ctx.rotate((i - .5) * .2); ctx.scale(back(p / .3), back(p / .3));
+    piece(() => cutCircle(0, 0, 62, 70 + i), C.cream, true); ctx.fillStyle = C.ink; ctx.font = `900 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(m, 0, 2); ctx.restore(); });
+}
+function s6(lt, t) { // my test on the DGX Spark
+  const by = 400 + slideIn(t, 32.5, -700);
+  ctx.save(); ctx.translate(540, by);
+  piece(() => torn(-230, -130, 460, 260, 61, 3), '#3a3530', true);
+  for (let i = 0; i < 7; i++) piece(() => torn(-190 + i * 56, -100, 34, 120, 62 + i, 1.5), C.mustard, false);
+  ctx.restore(); dymo('MY DGX SPARK', 540, by + 160, 32, .02);
+  const L1 = clamp((t - 35.28) / 2.6), L2 = clamp((t - 36.72) / 2.6);
+  if (t > 35.2) { receipt(140, 660, 360, 120 + L1 * 420, ITEMS, 13); dymo('OUT LOUD', 320, 640, 28, -.04); }
+  if (t > 36.6) { receipt(580, 660, 360, 120 + L2 * 420, ITEMS.filter(i => !i.think).concat([{ s: '?', c: 0 }]), 14); dymo('SILENT', 760, 640, 28, .04); }
+  if (t > 38.1) { // token meter
+    ctx.save(); ctx.translate(540, 1330); piece(() => { ctx.beginPath(); ctx.arc(0, 0, 110, Math.PI, 0); ctx.closePath(); }, C.cream, true);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 6; const a = Math.PI + .3 + Math.abs(Math.sin(Q * .35)) * 2.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 92, Math.sin(a) * 92); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.font = `700 26px ${TYPE}`; ctx.textAlign = 'center'; ctx.fillText('TOKEN METER', 0, 40); ctx.restore(); }
+}
+function s7(lt, t) { // half the receipt might be optional
+  const u = eio(stepT(t - 40.1) / .8);
+  ctx.save(); ctx.translate(-u * 40, 0); receipt(300, 640, 240, 680, ITEMS, 15); ctx.restore();
+  ctx.save(); ctx.translate(540 + u * 360, 980); ctx.rotate(u * .5); ctx.translate(-540, -980); receipt(540, 640, 240, 680, ITEMS, 16); ctx.restore();
+  ransom(['half the receipt', 'might be optional.'], 300, 92, 70, t - 39.7);
+  dymo('TACDEL · FOLLOW FOR THE TEST', 540, 1370, 30, -.02, eo(stepT(t - 40.9) / .2));
+}
+const FN = [s1, s2, s3, s4, s5, s6, s7];
+
+/* ---------- captions (white text, dark pill) ---------- */
+const CAP_ON = !new URLSearchParams(location.search).has('nocaps');
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+function draw(traw) {
+  const t = warp(traw); T = t; Q = Math.floor(t * 12); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(BG, 0, 0);
+  const i = sceneAt(t), lt = t - SCENES[i]; FN[i](lt, t); captions(t);
+}
+
+/* ---------- player + optional voice.mp3 in sync ---------- */
+const q = new URLSearchParams(location.search); if (q.has('clean')) document.body.classList.add('clean');
+let t = q.has('t') ? clamp(+q.get('t'), 0, DUR - .001) : 0, playing = !q.has('t'), prev = null;
+const au = new Audio('voice.mp3'); let auOK = false; au.addEventListener('canplay', () => { auOK = true; }); au.addEventListener('error', () => { auOK = false; });
+const bar = document.getElementById('bar'), fillEl = document.getElementById('fill'), info = document.getElementById('info');
+SCENES.slice(1).forEach(b => { const e = document.createElement('i'); e.className = 'tick'; e.style.left = (b / DUR * 100) + '%'; bar.appendChild(e); });
+function syncAudio() { if (!auOK) return; if (playing) { if (au.paused) { au.currentTime = t; au.play().catch(() => {}); } else if (Math.abs(au.currentTime - t) > .15) au.currentTime = t; } else if (!au.paused) au.pause(); }
+function frame(now) {
+  if (playing && prev !== null) { t += Math.min(.1, (now - prev) / 1000); if (t >= DUR) { t = 0; if (auOK) au.currentTime = 0; } }
+  prev = now; draw(t); syncAudio(); fillEl.style.width = (t / DUR * 100) + '%';
+  info.textContent = `${TITLE} · ${t.toFixed(1)} / ${DUR}s${auOK ? ' · voice.mp3 ✓' : ' · no voice.mp3'}${playing ? '' : ' · paused'}`;
+  requestAnimationFrame(frame);
+}
+addEventListener('keydown', e => { const k = e.key.toLowerCase(), i = sceneAt(t);
+  if (k === ' ') { playing = !playing; e.preventDefault(); } else if (k === 'r') { t = 0; playing = true; if (auOK) au.currentTime = 0; }
+  else if (k === 'arrowright') t = SCENES[Math.min(SCENES.length - 1, i + 1)]; else if (k === 'arrowleft') t = SCENES[t - SCENES[i] > .3 ? i : Math.max(0, i - 1)];
+  else if (k === 'h') document.body.classList.toggle('clean');
+  else if (k === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+bar.onclick = e => { const r = bar.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width) * DUR * .9999; };
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { t = s; playing = false; draw(t); };
+Promise.race([Promise.all(['900 64px Inter', '700 46px Inter'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 1500))]).finally(() => requestAnimationFrame(frame));
+</script>
+</body>
+</html>

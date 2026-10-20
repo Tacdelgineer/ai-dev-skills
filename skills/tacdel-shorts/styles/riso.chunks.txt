@@ -1,0 +1,19 @@
+This laptop can load an AI model
+that an RTX fifty-ninety can't even open. || that an RTX 5090 can’t even open.
+Inside is NVIDIA's RTX Spark, || Inside is NVIDIA’s RTX Spark,
+with the same core counts
+as the chip in my DGX Spark.
+In StorageReview's test, || In StorageReview’s test,
+its GPU got sixty-two and a half gigs of memory. || its GPU got 62.5 gigs of memory.
+Enough for a thirty-five billion parameter model, || Enough for a 35-billion parameter model,
+at about ninety tokens a second. || at about 90 tokens a second.
+The fifty-ninety laptop couldn't run that model at all. || The 5090 laptop couldn’t run that model at all.
+But on models that fit in its twenty-four gigs, || But on models that fit in its 24 gigs,
+it was two point three times faster. || it was 2.3 times faster.
+The catch: on Windows,
+you split the memory ahead of time.
+My Spark's Linux shares one pool. || My Spark’s Linux shares one pool.
+Price as tested: just over six thousand two hundred dollars. || Price as tested: just over $6,200.
+Fit, or speed?
+I'm running the same coding test on my Spark next. || I’m running the same coding test on my Spark next.
+Follow for the numbers.

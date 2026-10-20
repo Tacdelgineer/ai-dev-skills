@@ -1,0 +1,20 @@
+NVIDIA just shipped a tiny model
+with a dial for how hard it thinks.
+It's called Dory. || It’s called Dory.
+Four billion parameters,
+released October sixteenth. || released October 16th.
+Its middle twenty layers run in a loop, || Its middle 20 layers run in a loop,
+and you choose one, two, three, or four passes.
+Same file. More thinking.
+NVIDIA's coding score: || NVIDIA’s coding score:
+fifty point three with one loop. || 50.3 with one loop.
+Fifty-nine point five with two. || 59.5 with two.
+Sixty-one point eight with four. || 61.8 with four.
+So the second loop buys most of the gain.
+Two to four adds just two point three points. || Two to four adds just 2.3 points.
+And on a science test,
+two loops actually scores highest.
+These are NVIDIA's numbers, not mine yet. || These are NVIDIA’s numbers, not mine yet.
+It's small enough for my DGX Spark, || It’s small enough for my DGX Spark,
+so I'm timing every setting. || so I’m timing every setting.
+More thinking isn't always better thinking. || More thinking isn’t always better thinking.

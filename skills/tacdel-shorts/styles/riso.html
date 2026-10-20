@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RTX Spark: fit vs speed</title>
+<!--
+  SHORT A · "This laptop loads what a 5090 can't" · riso print style · 1080x1920 · 46.6 s
+  Timed to ElevenLabs take "Chosen take (synced to video)" in flow "tacdel · RTX Spark laptop VO".
+  RUN   Double-click. Put that take next to this file as voice.mp3 and press Space: it plays in sync.
+  KEYS  Space play/pause · R restart · Left/Right scene · H hide controls · F fullscreen
+  URL   ?clean hides controls · ?nocaps hides captions · ?t=12 freezes a moment
+  FACTS StorageReview review of HP OmniBook Ultra 16 (RTX Spark N1X), Oct 16 2026; NVIDIA DGX Spark hardware docs.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#b9b2a6;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  canvas{height:min(calc(100vh - 72px),calc((100vw - 24px)*16/9));width:auto;display:block}
+  #hud{width:min(calc((100vh - 72px)*9/16),calc(100vw - 24px));display:flex;flex-direction:column;gap:7px}
+  #bar{position:relative;height:6px;background:#272727;border-radius:3px;cursor:pointer}
+  #fill{position:absolute;left:0;top:0;bottom:0;background:#e9e2d5;border-radius:3px}
+  .tick{position:absolute;top:-3px;width:2px;height:12px;background:#555}
+  #row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden}
+  .clean #hud{display:none} .clean canvas{height:min(100vh,100vw*16/9)}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"><div id="bar"><div id="fill"></div></div><div id="row"><span id="info"></span><span>Space · R · ← → · H</span></div></div>
+<script>
+const TITLE = 'A · RTX Spark · riso';
+// captions = the voiceover, chunked, with start/end seconds from the ElevenLabs transcript of the chosen take
+const CAPS = [
+  ['This laptop can load an AI model', 0, 1.92], ['that an RTX 5090 can’t even open.', 2.0, 5.08],
+  ['Inside is NVIDIA’s RTX Spark,', 5.36, 7.92], ['with the same core counts', 8.0, 9.12], ['as the chip in my DGX Spark.', 9.2, 11.28],
+  ['In StorageReview’s test,', 11.52, 12.96], ['its GPU got 62.5 gigs of memory.', 13.04, 16.08],
+  ['Enough for a 35-billion parameter model,', 16.32, 19.12], ['at about 90 tokens a second.', 19.16, 20.88],
+  ['The 5090 laptop couldn’t run that model at all.', 21.36, 24.4], ['But on models that fit in its 24 gigs,', 24.64, 26.96],
+  ['it was 2.3 times faster.', 27.0, 29.32], ['The catch: on Windows,', 29.6, 31.36], ['you split the memory ahead of time.', 31.44, 33.36],
+  ['My Spark’s Linux shares one pool.', 33.44, 35.36], ['Price as tested: just over $6,200.', 35.92, 39.92],
+  ['Fit, or speed?', 40.0, 41.52], ['I’m running the same coding test on my Spark next.', 41.55, 44.24], ['Follow for the numbers.', 44.36, 45.44],
+];
+const SCENES = [0, 5.36, 11.52, 21.36, 29.6, 35.92, 40.0], DUR = 46.6;
+// re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const W = 1080, H = 1920;
+const SANS = '"Inter","Helvetica Neue","Segoe UI",Arial,sans-serif', MONO = '"JetBrains Mono","DejaVu Sans Mono",Menlo,Consolas,monospace';
+
+/* ---------- helpers ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3), eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.7; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const sceneAt = t => { let i = 0; while (i < SCENES.length - 1 && t >= SCENES[i + 1]) i++; return i; };
+let T = 0;
+
+/* ---------- riso: palette, halftone screens, grain, iso ---------- */
+const C = { paper: '#0f0d0c', white: '#f2eadd', orange: '#ff7a21', brick: '#b3432c', dim: 'rgba(242,234,221,.45)' };
+function screen(col, step, r, ang) { const s = document.createElement('canvas'); s.width = s.height = step; const g = s.getContext('2d');
+  g.fillStyle = col; g.beginPath(); g.arc(step / 2, step / 2, r, 0, 7); g.fill(); return { p: ctx.createPattern(s, 'repeat'), m: new DOMMatrix().rotateSelf(ang) }; }
+const P = { o: screen(C.orange, 10, 3.9, 15), oL: screen(C.orange, 10, 2.3, 15), b: screen(C.brick, 9, 3.6, 45), bL: screen(C.brick, 9, 2.2, 45),
+            w: screen(C.white, 8, 1.4, 75), wM: screen(C.white, 8, 2.3, 75) };
+const pat = s => { s.p.setTransform(ctx.getTransform().invertSelf().multiplySelf(s.m)); return s.p; };
+const fills = (...f) => f.forEach(s => { ctx.fillStyle = typeof s === 'string' ? s : pat(s); ctx.fill(); });
+const GRAIN = [0, 1, 2].map(() => { const g = document.createElement('canvas'); g.width = 540; g.height = 960; const x = g.getContext('2d'), im = x.createImageData(540, 960);
+  for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() < .5 ? 255 : 0; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = Math.random() < .35 ? 34 : 0; }
+  x.putImageData(im, 0, 0); return g; });
+const K = 62, CS = K * .866, CH = K * .5; let OX = 540, OY = 1000;
+const iso = (x, y, z = 0) => [OX + (x - y) * CS, OY + (x + y) * CH - z * K];
+const poly = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); };
+function box(x, y, z, w, d, h, top, left, right) {
+  const A = iso(x, y, z + h), B = iso(x + w, y, z + h), Cc = iso(x + w, y + d, z + h), D = iso(x, y + d, z + h), E = iso(x + w, y + d, z), F = iso(x, y + d, z), G = iso(x + w, y, z);
+  ctx.lineWidth = 3.5; ctx.lineJoin = 'round'; ctx.strokeStyle = C.white;
+  poly([D, Cc, E, F]); fills(C.paper, ...left); ctx.stroke(); poly([B, Cc, E, G]); fills(C.paper, ...right); ctx.stroke(); poly([A, B, Cc, D]); fills(C.paper, ...top); ctx.stroke();
+}
+function onFace(x, y, z, fn) { const [sx, sy] = iso(x, y, z); ctx.save(); ctx.transform(CS, CH, 0, K, sx, sy); fn(); ctx.restore(); }
+function printLine(s, x, y, size, col, p, align = 'center') {
+  if (p <= 0) return; ctx.save(); ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  const w = ctx.measureText(s).width, L = align === 'center' ? x - w / 2 : x;
+  ctx.beginPath(); ctx.rect(L - 30, y - size, (w + 80) * eo(p), size * 1.35); ctx.clip();
+  const reg = (1 - eo(p * 1.2)) * 22; ctx.fillStyle = pat(P.b); ctx.fillText(s, x + 8 + reg, y + 8 + reg * .4);
+  ctx.fillStyle = col; ctx.fillText(s, x - reg * .3, y); ctx.restore();
+}
+function mono(s, x, y, size, col, align = 'center', wt = 700) { ctx.font = `${wt} ${size}px ${MONO}`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col; ctx.fillText(s, x, y); }
+function stamp(s, x, y, ang, col, p, size = 46) { // rubber stamp that slams in
+  if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); const sc = lerp(1.7, 1, back(p / .6)); ctx.scale(sc, sc); ctx.globalAlpha *= clamp(p * 3);
+  ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const w = ctx.measureText(s).width + 50;
+  ctx.lineWidth = 7; ctx.strokeStyle = col; ctx.beginPath(); ctx.roundRect(-w / 2, -size * .85, w, size * 1.7, 12); ctx.stroke();
+  ctx.fillStyle = col; ctx.fillText(s, 0, 2); ctx.restore();
+}
+function srcLine(s, a) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; mono(s, 540, 1365, 24, C.dim, 'center', 500); ctx.restore(); }
+// machines (all the same size: compared things get equal weight)
+function laptop(cx, cy, label, screenFn, o = {}) {
+  OX = cx; OY = cy; const s = o.s || 1;
+  box(-1.5 * s, -1.0 * s, 0, 3 * s, 2 * s, .16, [P.w], [P.bL], [P.b]);
+  box(-1.5 * s, -1.0 * s, .16, 3 * s, .12, 1.9 * s, [P.w], [C.paper], [P.b]);
+  onFace(-1.5 * s, -.88 * s, .16 + 1.9 * s, () => { ctx.beginPath(); ctx.rect(.14 * s, .14 * s, 2.72 * s, 1.62 * s); ctx.fillStyle = '#17120f'; ctx.fill(); ctx.clip(); if (screenFn) screenFn(s); });
+  if (label) { const [lx, ly] = iso(0, 1.6 * s, 0); mono(label, lx, ly + 34, 26, C.white); }
+}
+function sparkBox(cx, cy, label, s = 1) { // DGX Spark: small box with a vented front
+  OX = cx; OY = cy; box(-1 * s, -1 * s, 0, 2 * s, 2 * s, .75 * s, [P.oL], [C.paper], [P.b]);
+  onFace(-1 * s, 1 * s, .75 * s, () => { for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? C.orange : C.brick; ctx.fillRect(.15 * s + i * .3 * s, .18 * s + j * .25 * s, .2 * s, .13 * s); } });
+  if (label) { const [lx, ly] = iso(0, 1.4 * s, 0); mono(label, lx, ly + 34, 26, C.white); }
+}
+function cube(cx, cy, z, s, label, a = 1) { OX = cx; OY = cy; ctx.save(); ctx.globalAlpha *= a;
+  box(-s / 2, -s / 2, z, s, s, s, [P.oL], [C.orange], [P.o]);
+  onFace(-s / 2, s / 2, z + s, () => { ctx.font = `900 ${.42 * s}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.paper; ctx.fillText(label, s / 2, s / 2 + .02); });
+  ctx.restore(); }
+function codeScreen(n, col = C.white) { return s => { for (let i = 0; i < n; i++) { const r = Math.floor(T * 5) + i; ctx.fillStyle = r % 4 === 1 ? C.orange : r % 3 ? col : C.dim; ctx.fillRect(.3 * s + (r % 3) * .12 * s, .3 * s + i * .2 * s, (.5 + rnd(r) * 1.4) * s, .07 * s); } }; }
+function meterBar(x, y, w, h, frac, label, value, pFill = P.o) {
+  ctx.lineWidth = 4; ctx.strokeStyle = C.white; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.stroke();
+  if (frac > 0) { ctx.beginPath(); ctx.roundRect(x + 7, y + 7, (w - 14) * frac, h - 14, 6); fills(pFill); }
+  if (label) mono(label, x, y - 16, 26, C.dim, 'left', 500); if (value) mono(value, x + w, y - 16, 30, C.white, 'right');
+}
+
+/* ---------- scenes (times are seconds into the voiceover) ---------- */
+function s1(lt, t) { // "This laptop can load an AI model that an RTX 5090 can't even open."
+  printLine('THIS LAPTOP LOADS', 540, 330, 92, C.white, (t - .05) / .5);
+  printLine("WHAT A 5090 CAN'T.", 540, 440, 92, C.orange, (t - 2.4) / .5);
+  laptop(285, 1090, 'RTX 5090 · 24 GB', codeScreen(5, C.dim), { s: 1.12 });
+  const ok = t > 4.4; laptop(800, 1090, 'RTX SPARK · 128 GB', ok ? codeScreen(7) : null, { s: 1.12 });
+  // the 35B model tries the 5090 first, bounces, then lands in the RTX Spark laptop
+  const a1 = eio((t - 1.6) / .9), bounce = t > 3.7 ? eo((t - 3.7) / .35) : 0, toR = eio((t - 4.05) / .5);
+  let x = lerp(540, 285, a1), y = lerp(600, 760, a1) - Math.sin(clamp((t - 3.7) / .35) * Math.PI) * 120 * (t > 3.7 ? 1 : 0);
+  if (t > 3.7) { x = lerp(285, 800, toR); y = lerp(760, 820, toR) - Math.sin(toR * Math.PI) * 200; }
+  if (t < 4.6) cube(x, y, 0, 1.2, '35B', t > 4.45 ? 1 - clamp((t - 4.45) / .15) : 1);
+  stamp("WON'T FIT", 285, 640, -.12, C.brick, (t - 3.76) / .5);
+  if (ok) stamp('LOADED', 800, 640, .08, C.orange, (t - 4.45) / .5);
+}
+function s2(lt, t) { // RTX Spark = same core counts as the GB10 in DGX Spark
+  printLine('SAME CORE COUNTS', 540, 330, 96, C.white, lt / .5);
+  laptop(280, 900, 'RTX SPARK LAPTOP', codeScreen(6), { s: .95 });
+  if (t > 9.9) { ctx.save(); ctx.globalAlpha = eo((t - 9.9) / .4); sparkBox(810, 880, 'MY DGX SPARK', 1.15); ctx.restore(); }
+  if (t > 9.9) printLine('=', 548, 800, 130, C.orange, (t - 10.1) / .3);
+  // spec plate
+  const p = eo((t - 8.4) / .45); if (p > 0) { ctx.save(); ctx.globalAlpha = p; ctx.translate(0, (1 - p) * 40);
+    ctx.beginPath(); ctx.roundRect(120, 1090, 840, 200, 22); fills(P.b); ctx.beginPath(); ctx.roundRect(106, 1076, 840, 200, 22); fills(C.paper); ctx.lineWidth = 4; ctx.strokeStyle = C.white; ctx.stroke();
+    mono('20-CORE CPU', 526, 1160, 50, C.white); mono('6,144-CORE BLACKWELL GPU', 526, 1236, 44, C.orange); ctx.restore(); }
+  srcLine('SPECS: STORAGEREVIEW (RTX SPARK N1X) · NVIDIA DGX SPARK DOCS', eo((t - 8.6) / .4));
+}
+function s3(lt, t) { // 128 GB laptop: GPU gets 62.5 GB; enough for a 35B model at ~90 tok/s
+  printLine('128 GB LAPTOP', 540, 300, 80, C.white, lt / .45);
+  // the memory bar, split GPU | system
+  const split = eo((t - 13.1) / .7), gpuW = 840 * (62.5 / 128);
+  meterBar(120, 520, 840, 130, 0, 'MEMORY', '128 GB');
+  ctx.beginPath(); ctx.roundRect(127, 527, gpuW * split, 116, 6); fills(P.o);
+  if (split > .95) { ctx.beginPath(); ctx.roundRect(127 + gpuW + 8, 527, 840 - 14 - gpuW - 8, 116, 6); fills(P.w); }
+  const g = clamp((t - 14.08) / .9), gb = (62.5 * eo(g)).toFixed(1);
+  if (t > 13.9) { mono('GPU', 150, 700, 30, C.orange, 'left'); printLine(`${gb} GB`, 120, 830, 120, C.orange, (t - 14.0) / .3, 'left'); mono('FOR THE GPU', 130, 880, 30, C.white, 'left'); }
+  if (t > 14.4) mono('SYSTEM', 940, 700, 30, C.white, 'right');
+  // a 35B model drops into the GPU share and runs
+  if (t > 16.3) {
+    const d = eo((t - 16.9) / .55); cube(330, lerp(440, 610, d), 0, 1.25, '35B', clamp((t - 16.3) / .3));
+    stamp('FITS', 720, 800, -.08, C.orange, (t - 17.6) / .5);
+  }
+  if (t > 19.4) { const v = 89.5 * eo((t - 19.5) / .9);
+    printLine(`${v.toFixed(1)} TOK/S`, 540, 1180, 120, C.white, (t - 19.45) / .35); mono('ON THE 35B MODEL', 540, 1250, 32, C.dim); }
+  srcLine(t < 16.3 ? 'STORAGEREVIEW · HP OMNIBOOK ULTRA 16 · OCT 16, 2026' : 'QWEN3.6-35B-A3B · STORAGEREVIEW MEASURED 89.5 TOK/S', clamp((t - 12) / .4));
+}
+function s4(lt, t) { // the 5090 can't run it; on models that fit in 24 GB it is 2.3x faster
+  if (t < 24.64) {
+    printLine("THE 5090 CAN'T", 540, 300, 96, C.white, lt / .45); printLine('RUN IT', 540, 410, 96, C.orange, (lt - .3) / .45);
+    laptop(540, 950, 'RTX 5090 LAPTOP · 24 GB', codeScreen(5, C.dim));
+    const d = eio((t - 21.9) / .6); cube(540, lerp(560, 760, d) + (t > 22.6 ? Math.sin((t - 22.6) * 30) * 8 * (1 - clamp((t - 22.6) / .5)) : 0), 1.9, 1.25, '35B');
+    stamp('OUT OF MEMORY', 540, 1230, -.06, C.brick, (t - 22.64) / .5);
+    srcLine('STORAGEREVIEW: RAZER BLADE 16 (RTX 5090) COULD NOT RUN THE 35B TIER', clamp((t - 22.8) / .4));
+  } else {
+    const u = t - 24.64;
+    printLine('ON MODELS THAT FIT', 540, 300, 84, C.white, u / .45); printLine('IN 24 GB', 540, 400, 84, C.orange, (u - .3) / .45);
+    // the race: same bar style for both, the label tells who wins
+    const g = eo((t - 25.4) / 1.2);
+    meterBar(120, 640, 840, 110, g, 'RTX 5090 LAPTOP · SPEED', '', P.o);
+    meterBar(120, 860, 840, 110, g / 2.3, 'RTX SPARK LAPTOP · SPEED', '', P.o);
+    printLine('2.3× FASTER', 540, 1150, 120, C.orange, (t - 27.36) / .4);
+    mono('THE 5090, WHERE THE MODEL FITS', 540, 1215, 30, C.white);
+    srcLine('STORAGEREVIEW: ≈2.3× ON MODELS THAT FIT IN 24 GB', clamp((t - 25) / .4));
+  }
+}
+function s5(lt, t) { // Windows: split set ahead of time. Spark + Linux: one shared pool
+  printLine('THE CATCH', 540, 290, 96, C.orange, lt / .45);
+  // Windows: two fixed boxes and a lock
+  mono('WINDOWS', 120, 470, 34, C.white, 'left');
+  const wy = 500; ctx.lineWidth = 4; ctx.strokeStyle = C.white;
+  ctx.beginPath(); ctx.roundRect(120, wy, 400, 150, 14); fills(P.o); ctx.stroke(); mono('GPU', 320, wy + 92, 44, C.white, 'center', 900);
+  ctx.beginPath(); ctx.roundRect(560, wy, 400, 150, 14); fills(P.wM); ctx.stroke(); mono('CPU', 760, wy + 92, 44, C.orange, 'center', 900);
+  const lk = eo((t - 31.68) / .4); if (lk > 0) { ctx.save(); ctx.globalAlpha = lk; ctx.translate(540, wy + 75); ctx.scale(lerp(1.6, 1, back(lk)), lerp(1.6, 1, back(lk)));
+    ctx.beginPath(); ctx.arc(0, -20, 22, Math.PI, 0); ctx.lineWidth = 8; ctx.strokeStyle = C.white; ctx.stroke(); ctx.beginPath(); ctx.roundRect(-34, -20, 68, 54, 8); fills(C.brick); ctx.lineWidth = 4; ctx.stroke(); ctx.restore(); }
+  mono('SPLIT SET AHEAD OF TIME', 540, wy + 210, 30, C.dim);
+  // Linux on the Spark: one pool that flows where it's needed
+  const lp = eo((t - 33.44) / .45);
+  if (lp > 0) { ctx.save(); ctx.globalAlpha = lp; const ly = 930;
+    mono('MY SPARK · LINUX', 120, ly - 30, 34, C.white, 'left');
+    ctx.beginPath(); ctx.roundRect(120, ly, 840, 170, 14); fills(C.paper); ctx.lineWidth = 4; ctx.strokeStyle = C.white; ctx.stroke();
+    ctx.save(); ctx.clip(); ctx.beginPath(); ctx.moveTo(120, ly + 170);
+    for (let x = 120; x <= 960; x += 12) ctx.lineTo(x, ly + 40 + Math.sin(x * .02 + T * 4) * 14); ctx.lineTo(960, ly + 170); ctx.closePath(); fills(P.o); ctx.restore();
+    const sh = Math.sin(T * 1.6) * 160; mono('GPU', 330 + sh, ly + 112, 44, C.white, 'center', 900); mono('CPU', 750 + sh, ly + 112, 44, C.white, 'center', 900);
+    mono('ONE SHARED POOL', 540, ly + 230, 30, C.white); ctx.restore(); }
+  srcLine('STORAGEREVIEW: SPLIT SET IN NVIDIA APP; NO UNIFIED MEMORY ON WINDOWS YET', clamp((t - 30) / .4));
+}
+function s6(lt, t) { // price tag
+  printLine('PRICE AS TESTED', 540, 320, 84, C.white, lt / .45);
+  const p = back((t - 36.4) / .7), sw = Math.sin(T * 2.2) * .05;
+  if (t > 36.2) { ctx.save(); ctx.translate(540, 520); ctx.rotate(-.12 + sw); ctx.scale(p, p);
+    ctx.strokeStyle = C.white; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -120); ctx.lineTo(0, 0); ctx.stroke();
+    const tag = () => { ctx.beginPath(); ctx.moveTo(-90, 40); ctx.lineTo(90, 40); ctx.lineTo(300, 200); ctx.lineTo(300, 640); ctx.lineTo(-300, 640); ctx.lineTo(-300, 200); ctx.closePath(); };
+    ctx.save(); ctx.translate(18, 18); tag(); fills(P.b); ctx.restore(); tag(); fills(C.paper, P.oL); ctx.lineWidth = 5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 110, 22, 0, 7); fills(C.paper); ctx.stroke();
+    ctx.font = `900 132px ${SANS}`; ctx.textAlign = 'center'; ctx.fillStyle = C.white; ctx.fillText('$6,229', 0, 340); ctx.font = `900 64px ${SANS}`; ctx.fillText('.99', 210, 400);
+    mono('128 GB · HP.COM', 0, 480, 38, C.white); mono('HP OMNIBOOK ULTRA 16', 0, 545, 30, C.white, 'center', 500); ctx.restore(); }
+  if (t > 38.2) { ctx.save(); ctx.globalAlpha = eo((t - 38.2) / .4); mono('32 GB FROM $3,199.99  ·  64 GB $4,999.99', 540, 1290, 30, C.white); ctx.restore(); }
+  srcLine('PRICES VIA STORAGEREVIEW, AS OF OCT 14, 2026', clamp((t - 36.4) / .4));
+}
+function s7(lt, t) { // end card
+  printLine('FIT', 540, 400, 200, C.white, lt / .4);
+  printLine('OR SPEED?', 540, 600, 160, C.orange, (t - 40.64) / .45);
+  const p = eo((t - 41.4) / .5);
+  if (p > 0) { ctx.save(); ctx.globalAlpha = p; ctx.translate(0, (1 - p) * 50);
+    laptop(215, 1010, 'RTX SPARK', codeScreen(5), { s: .55 }); laptop(540, 1010, 'RTX 5090', codeScreen(4, C.dim), { s: .55 }); sparkBox(865, 990, 'MY SPARK', .75); ctx.restore(); }
+  if (t > 41.6) { ctx.save(); ctx.globalAlpha = eo((t - 41.6) / .4); mono('SAME CODING TEST ON MY SPARK · NEXT', 540, 1220, 32, C.white); ctx.restore(); }
+  if (t > 44.3) { ctx.save(); ctx.globalAlpha = eo((t - 44.3) / .4); mono('FOLLOW FOR THE NUMBERS', 540, 1300, 34, C.orange); mono('TACDEL', 540, 1365, 28, C.dim); ctx.restore(); }
+}
+const FN = [s1, s2, s3, s4, s5, s6, s7];
+
+/* ---------- captions (white text, dark pill) ---------- */
+const CAP_ON = !new URLSearchParams(location.search).has('nocaps');
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+
+function draw(traw) {
+  const t = warp(traw); T = t; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+  const i = sceneAt(t), t0 = SCENES[i], t1 = SCENES[i + 1] ?? DUR, lt = t - t0;
+  ctx.save(); ctx.globalAlpha = eo(lt / .22) * (i < SCENES.length - 1 ? 1 - clamp((t - (t1 - .14)) / .14) : 1); FN[i](lt, t); ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  const g = ctx.createRadialGradient(540, 960, 500, 540, 960, 1250); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = .9; ctx.drawImage(GRAIN[Math.floor(t * 12) % 3], 0, 0, W, H); ctx.globalAlpha = 1;
+  captions(t);
+}
+
+/* ---------- player + optional voice.mp3 in sync ---------- */
+const q = new URLSearchParams(location.search); if (q.has('clean')) document.body.classList.add('clean');
+let t = q.has('t') ? clamp(+q.get('t'), 0, DUR - .001) : 0, playing = !q.has('t'), prev = null;
+const au = new Audio('voice.mp3'); let auOK = false; au.addEventListener('canplay', () => { auOK = true; }); au.addEventListener('error', () => { auOK = false; });
+const bar = document.getElementById('bar'), fillEl = document.getElementById('fill'), info = document.getElementById('info');
+SCENES.slice(1).forEach(b => { const e = document.createElement('i'); e.className = 'tick'; e.style.left = (b / DUR * 100) + '%'; bar.appendChild(e); });
+function syncAudio() { if (!auOK) return; if (playing) { if (au.paused) { au.currentTime = t; au.play().catch(() => {}); } else if (Math.abs(au.currentTime - t) > .15) au.currentTime = t; } else if (!au.paused) au.pause(); }
+function frame(now) {
+  if (playing && prev !== null) { t += Math.min(.1, (now - prev) / 1000); if (t >= DUR) { t = 0; if (auOK) au.currentTime = 0; } }
+  prev = now; draw(t); syncAudio(); fillEl.style.width = (t / DUR * 100) + '%';
+  info.textContent = `${TITLE} · ${t.toFixed(1)} / ${DUR}s${auOK ? ' · voice.mp3 ✓' : ' · no voice.mp3'}${playing ? '' : ' · paused'}`;
+  requestAnimationFrame(frame);
+}
+addEventListener('keydown', e => { const k = e.key.toLowerCase(), i = sceneAt(t);
+  if (k === ' ') { playing = !playing; e.preventDefault(); } else if (k === 'r') { t = 0; playing = true; if (auOK) au.currentTime = 0; }
+  else if (k === 'arrowright') t = SCENES[Math.min(SCENES.length - 1, i + 1)]; else if (k === 'arrowleft') t = SCENES[t - SCENES[i] > .3 ? i : Math.max(0, i - 1)];
+  else if (k === 'h') document.body.classList.toggle('clean');
+  else if (k === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+bar.onclick = e => { const r = bar.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width) * DUR * .9999; };
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { t = s; playing = false; draw(t); };
+Promise.race([Promise.all(['900 64px Inter', '700 46px Inter', '700 40px "JetBrains Mono"'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 1500))]).finally(() => requestAnimationFrame(frame));
+</script>
+</body>
+</html>
