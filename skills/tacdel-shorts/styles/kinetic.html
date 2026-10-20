@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dory: a thinking dial</title>
+<!--
+  SHORT C · "NVIDIA made a model with a thinking dial" · kinetic typography · 1080x1920 · 45.8 s
+  Timed to ElevenLabs take "Chosen take (synced to video)" in flow "tacdel · NVIDIA Dory VO".
+  RUN   Double-click. Put that take next to this file as voice.mp3 and press Space: it plays in sync.
+  KEYS  Space play/pause · R restart · Left/Right scene · H hide controls · F fullscreen
+  URL   ?clean hides controls · ?nocaps hides captions · ?t=12 freezes a moment
+  FACTS NVIDIA model card, nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16 (Oct 16 2026). All scores vendor-reported.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#b9b2a6;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  canvas{height:min(calc(100vh - 72px),calc((100vw - 24px)*16/9));width:auto;display:block}
+  #hud{width:min(calc((100vh - 72px)*9/16),calc(100vw - 24px));display:flex;flex-direction:column;gap:7px}
+  #bar{position:relative;height:6px;background:#272727;border-radius:3px;cursor:pointer}
+  #fill{position:absolute;left:0;top:0;bottom:0;background:#e9e2d5;border-radius:3px}
+  .tick{position:absolute;top:-3px;width:2px;height:12px;background:#555}
+  #row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden}
+  .clean #hud{display:none} .clean canvas{height:min(100vh,100vw*16/9)}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"><div id="bar"><div id="fill"></div></div><div id="row"><span id="info"></span><span>Space · R · ← → · H</span></div></div>
+<script>
+const TITLE = 'C · NVIDIA Dory · kinetic';
+const CAPS = [
+  ['NVIDIA just shipped a tiny model', 0, 1.92], ['with a dial for how hard it thinks.', 2.0, 4.0], ['It’s called Dory.', 4.4, 5.28], ['Four billion parameters,', 5.76, 7.36],
+  ['released October 16th.', 7.44, 8.96], ['Its middle 20 layers run in a loop,', 9.44, 11.52], ['and you choose one, two, three, or four passes.', 11.6, 14.8],
+  ['Same file. More thinking.', 15.28, 16.96], ['NVIDIA’s coding score:', 17.52, 19.12], ['50.3 with one loop.', 19.2, 21.36], ['59.5 with two.', 21.4, 23.68],
+  ['61.8 with four.', 23.8, 26.0], ['So the second loop buys most of the gain.', 26.08, 28.8], ['Two to four adds just 2.3 points.', 28.84, 31.68],
+  ['And on a science test,', 31.72, 32.96], ['two loops actually scores highest.', 33.04, 35.36], ['These are NVIDIA’s numbers, not mine yet.', 35.44, 37.84],
+  ['It’s small enough for my DGX Spark,', 37.92, 39.84], ['so I’m timing every setting.', 39.92, 42.0], ['More thinking isn’t always better thinking.', 42.12, 44.56],
+];
+const SCENES = [0, 4.4, 9.44, 17.52, 26.08, 35.44, 42.12], DUR = 45.8;
+// re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const W = 1080, H = 1920;
+const SANS = '"Inter","Helvetica Neue","Segoe UI",Arial,sans-serif', MONO = '"JetBrains Mono","DejaVu Sans Mono",Menlo,Consolas,monospace';
+
+/* ---------- helpers ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3), e5 = u => 1 - Math.pow(1 - clamp(u), 5);
+const eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.8; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const sceneAt = t => { let i = 0; while (i < SCENES.length - 1 && t >= SCENES[i + 1]) i++; return i; };
+let T = 0;
+
+/* ---------- type tools ---------- */
+const C = { ink: '#0d0d0e', paper: '#f2efe7', blue: '#2f56ff', blueL: '#8aa0ff', dimI: 'rgba(242,239,231,.6)', dimP: 'rgba(13,13,14,.6)' };
+const LS = 'letterSpacing' in ctx;
+function setFont(size, wt = 900, font = SANS) { ctx.font = `${wt} ${size}px ${font}`; if (LS) ctx.letterSpacing = (font === SANS && wt >= 800 ? -size * .045 : 0) + 'px'; }
+function fit(s, width, wt = 900, font = SANS) { setFont(100, wt, font); return 100 * width / ctx.measureText(s).width; }
+function reveal(s, x, y, size, col, p, out = 0, o = {}) {
+  if (p <= 0) return; ctx.save(); setFont(size, o.wt || 900, o.font || SANS); ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.beginPath(); ctx.rect(0, y - size * .82, W, size * 1.05); ctx.clip();
+  const dy = (1 - e5(p)) * size - e5(out) * size;
+  if (o.blur && p < 1) { for (let k = 3; k > 0; k--) { ctx.globalAlpha = .12 * k; ctx.fillStyle = col; ctx.fillText(s, x, y + dy + k * size * .09 * (1 - p)); } ctx.globalAlpha = 1; }
+  ctx.fillStyle = col; ctx.fillText(s, x, y + dy); ctx.restore();
+}
+function block(lines, top, width, gap = 22) { let y = top; return lines.map(s => { const size = fit(s, width); y += size * .728; const r = { s, size, y }; y += gap; return r; }); }
+function label(s, x, y, size, col, a = 1, align = 'left', font = MONO, wt = 700) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; setFont(size, wt, font); ctx.textAlign = align; ctx.fillStyle = col; ctx.fillText(s, x, y + (1 - eo(a)) * 24); ctx.restore(); }
+function slam(s, x, y, size, col, p, align = 'center') { // number that lands hard
+  if (p <= 0) return; ctx.save(); const sc = lerp(1.35, 1, back(p / .35)); ctx.translate(x, y); ctx.scale(sc, sc); setFont(size); ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  if (p < .3) { ctx.globalAlpha = .25; ctx.fillStyle = col; ctx.fillText(s, 0, -size * .06); ctx.fillText(s, 0, size * .06); ctx.globalAlpha = 1; }
+  ctx.fillStyle = col; ctx.fillText(s, 0, 0); ctx.restore(); }
+const outU = (t, t1) => clamp((t - (t1 - .2)) / .2);
+
+/* ---------- scenes ---------- */
+function s1(lt, t, t1) { // a tiny model with a thinking dial
+  ctx.fillStyle = C.ink; ctx.fillRect(0, 0, W, H); const out = outU(t, t1);
+  label('NVIDIA JUST SHIPPED A TINY MODEL WITH A', 70, 330, 34, C.dimI, eo(lt / .3) * (1 - out));
+  const s = fit('THINKING', 940); reveal('THINKING', 70, 420 + s * .728, s, C.paper, (t - 1.95) / .35, out, { blur: true });
+  const d = fit('DIAL.', 560); reveal('DIAL.', 70, 420 + s * .728 + 30 + d * .728, d, C.blue, (t - 2.3) / .35, out, { blur: true });
+  // the dial itself: clicks from 1 to 4
+  const p = e5((t - 2.4) / .4) * (1 - out); if (p > 0) { const cx = 850, cy = 420 + s * .728 + 30 + d * .4, r = 105 * p;
+    ctx.save(); ctx.strokeStyle = C.paper; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
+    const step = Math.min(3, Math.floor(clamp((t - 2.7) / 1.2) * 4)), a = -Math.PI * .75 + step * Math.PI * .5;
+    for (let k = 0; k < 4; k++) { const ak = -Math.PI * .75 + k * Math.PI * .5; setFont(40, 700, MONO); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = k === step ? C.blue : C.dimI; ctx.fillText(String(k + 1), cx + Math.cos(ak) * (r + 38), cy + Math.sin(ak) * (r + 38)); }
+    ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.strokeStyle = C.blue; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * r * .78, cy + Math.sin(a) * r * .78); ctx.stroke(); ctx.restore(); }
+}
+function s2(lt, t, t1) { // It's called Dory. 4B parameters, released Oct 16
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H); const out = outU(t, t1);
+  label('NVIDIA NEMOTRON LABS', 70, 300, 34, C.blue, eo((t - 4.4) / .3) * (1 - out));
+  const s = fit('DORY', 940); reveal('DORY', 70, 340 + s * .728, s, C.ink, (t - 4.75) / .35, out, { blur: true });
+  const y0 = 340 + s * .728;
+  reveal('4B PARAMETERS', 70, y0 + 170, 96, C.ink, (t - 5.76) / .35, out); reveal('RELEASED', 70, y0 + 300, 96, C.ink, (t - 7.44) / .35, out);
+  reveal('OCT 16, 2026', 70, y0 + 430, 96, C.blue, (t - 7.84) / .35, out);
+}
+function s3(lt, t, t1) { // the middle 20 layers loop; choose 1-4 passes
+  ctx.fillStyle = C.blue; ctx.fillRect(0, 0, W, H); const out = outU(t, t1), a = eo(lt / .3) * (1 - out);
+  const cues = [12.32, 12.92, 13.48, 14.0], pass = cues.filter(c => t >= c).length;
+  ctx.save(); ctx.globalAlpha = a;
+  const bx = 90, bw = 560;
+  ctx.lineWidth = 8; ctx.strokeStyle = C.paper;
+  ctx.beginPath(); ctx.roundRect(bx, 300, bw, 130, 20); ctx.stroke(); label('8 LAYERS · IN', bx + 40, 384, 46, C.paper, 1);
+  const pulse = pass ? Math.max(0, 1 - (t - cues[pass - 1]) / .35) : 0, grow = eo((t - 9.9) / .4);
+  ctx.save(); ctx.translate(bx + bw / 2, 600); ctx.scale(1 + pulse * .05, 1 + pulse * .05);
+  ctx.fillStyle = C.paper; ctx.beginPath(); ctx.roundRect(-bw / 2, -110 * grow, bw, 220 * grow, 20); ctx.fill(); ctx.restore();
+  if (grow > .9) { setFont(84); ctx.textAlign = 'center'; ctx.fillStyle = C.blue; ctx.fillText('20 LAYERS', bx + bw / 2, 628); }
+  ctx.beginPath(); ctx.roundRect(bx, 770, bw, 130, 20); ctx.stroke(); label('8 LAYERS · OUT', bx + 40, 854, 46, C.paper, 1);
+  // loop arrow + pass counter
+  const la = eo((t - 11.0) / .4); if (la > 0) { ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath();
+    ctx.arc(bx + bw + 170, 600, 115, -Math.PI * .5, -Math.PI * .5 + Math.PI * 2 * .82 * la); ctx.stroke();
+    const ea = -Math.PI * .5 + Math.PI * 2 * .82 * la, ex = bx + bw + 170 + Math.cos(ea) * 115, ey = 600 + Math.sin(ea) * 115;
+    ctx.fillStyle = C.paper; ctx.beginPath(); ctx.arc(ex, ey, 14, 0, 7); ctx.fill(); }
+  if (pass) slam(`×${pass}`, bx + bw + 170, 640, 110, C.paper, (t - cues[pass - 1]) / .3);
+  ctx.strokeStyle = C.paper; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(bx + bw, 600); ctx.lineTo(bx + bw + 55, 600); ctx.stroke();
+  ctx.restore();
+  const L = [{ s: 'SAME FILE.', at: 15.28 }, { s: 'MORE THINKING.', at: 16.24 }];
+  L.forEach((l, i) => { const sz = fit(l.s, 940); reveal(l.s, 70, 1040 + i * 190 + sz * .728 * 0 + 120, Math.min(sz, 170), i ? C.ink : C.paper, (t - l.at) / .3, out, { blur: true }); });
+}
+function s4(lt, t, t1) { // coding score 50.3 -> 59.5 -> 61.8
+  ctx.fillStyle = C.ink; ctx.fillRect(0, 0, W, H); const out = outU(t, t1), a = 1 - out;
+  label("NVIDIA'S CODING SCORE", 70, 290, 40, C.paper, eo(lt / .3) * a); label('SWE-BENCH VERIFIED · VENDOR-REPORTED', 70, 340, 26, C.dimI, eo((lt - .2) / .3) * a, 'left', MONO, 700);
+  const R = [{ v: '50.3', l: '1 LOOP', at: 19.2 }, { v: '59.5', l: '2 LOOPS', at: 21.4 }, { v: '61.8', l: '4 LOOPS', at: 23.8 }], cur = R.filter(r => t >= r.at).pop();
+  ctx.save(); ctx.globalAlpha = a;
+  if (cur) { slam(cur.v, 540, 790, fit('61.8', 860), C.paper, (t - cur.at) / .3); label(cur.l, 540, 900, 64, C.blue, 1, 'center'); }
+  R.forEach((r, i) => { if (t < r.at) return; const y = 1060 + i * 110, p = e5((t - r.at) / .5);
+    label(r.l, 70, y, 40, C.dimI, 1); ctx.fillStyle = i === R.indexOf(cur) ? C.blue : C.paper; ctx.fillRect(330, y - 34, 620 * (+r.v / 100) * p, 40); label(r.v, 330 + 620 * (+r.v / 100) * p + 20, y, 40, C.paper, 1); });
+  label('BARS START AT ZERO', 70, 1390, 22, C.dimI, cur ? 1 : 0);
+  ctx.restore();
+}
+function s5(lt, t, t1) { // diminishing returns; science test peaks at 2 loops
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H); const out = outU(t, t1), a = 1 - out;
+  ctx.save(); ctx.globalAlpha = a;
+  slam('+9.2', 70, 560, fit('+9.2', 760), C.blue, (t - 26.64) / .35, 'left'); label('1 → 2 LOOPS', 80, 640, 44, C.ink, eo((t - 26.9) / .3));
+  slam('+2.3', 70, 820, 140, C.ink, (t - 29.3) / .35, 'left'); label('2 → 4 LOOPS', 440, 815, 40, C.dimP, eo((t - 29.5) / .3));
+  label('SCIENCE TEST · GPQA DIAMOND', 70, 1000, 36, C.ink, eo((t - 32.0) / .3));
+  const G = [{ l: '1 LOOP', v: '69.19', at: 33.0 }, { l: '2 LOOPS', v: '72.41', at: 33.2, top: 1 }, { l: '4 LOOPS', v: '72.16', at: 33.4 }];
+  G.forEach((g, i) => { const p = eo((t - g.at) / .3); if (p <= 0) return; const y = 1090 + i * 88;
+    label(g.l, 70, y, 46, g.top ? C.blue : C.ink, p); label(g.v, 420, y, 46, g.top ? C.blue : C.ink, p); if (g.top) label('← HIGHEST', 640, y, 40, C.blue, eo((t - 34.56) / .3)); });
+  label('NVIDIA MODEL CARD · VENDOR-REPORTED', 70, 1390, 22, C.dimP, eo((t - 33.5) / .3));
+  ctx.restore();
+}
+function s6(lt, t, t1) { // not mine yet; small enough for my DGX Spark; timing every setting
+  ctx.fillStyle = C.blue; ctx.fillRect(0, 0, W, H); const out = outU(t, t1);
+  label("THESE ARE NVIDIA'S NUMBERS.", 70, 330, 40, C.paper, eo(lt / .3) * (1 - out));
+  const s = fit('NOT MINE', 940); reveal('NOT MINE', 70, 380 + s * .728, s, C.paper, (t - 36.7) / .3, out, { blur: true });
+  const y2 = 380 + s * .728 + 26 + fit('YET.', 520) * .728; reveal('YET.', 70, y2, fit('YET.', 520), C.ink, (t - 37.2) / .3, out, { blur: true });
+  label('4B FITS MY DGX SPARK', 70, y2 + 140, 52, C.paper, eo((t - 38.9) / .3) * (1 - out));
+  if (t > 40.4) { const a = eo((t - 40.4) / .3) * (1 - out); ctx.save(); ctx.globalAlpha = a; const cx = 160, cy = y2 + 300;
+    ctx.strokeStyle = C.paper; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(cx, cy, 70, 0, 7); ctx.stroke(); ctx.fillStyle = C.paper; ctx.fillRect(cx - 14, cy - 98, 28, 18);
+    const ha = T * 6; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(ha) * 52, cy - Math.cos(ha) * 52); ctx.stroke();
+    [1, 2, 3, 4].forEach((n, i) => { const on = Math.floor(T * 2.5) % 4 === i; ctx.fillStyle = on ? C.paper : 'rgba(242,239,231,.25)'; ctx.beginPath(); ctx.roundRect(290 + i * 150, cy - 60, 120, 120, 24); ctx.fill();
+      setFont(70); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = on ? C.blue : C.paper; ctx.fillText(n, 350 + i * 150, cy + 4); });
+    ctx.restore(); label('LOOPS, TIMED', 290, y2 + 420, 34, C.paper, eo((t - 40.6) / .3) * (1 - out)); }
+}
+function s7(lt, t, t1) { // more thinking isn't always better thinking
+  ctx.fillStyle = C.ink; ctx.fillRect(0, 0, W, H);
+  const L = block(['MORE THINKING', '≠ BETTER', 'THINKING.'], 420, 940, 30);
+  L.forEach((l, i) => reveal(l.s, 70, l.y, l.size, i === 1 ? C.blue : C.paper, (t - 42.12 - i * .25) / .35, 0, { blur: true }));
+  label('TACDEL · FOLLOW FOR THE TIMINGS', 540, 1380, 30, C.dimI, eo((t - 43.4) / .3), 'center');
+}
+const FN = [s1, s2, s3, s4, s5, s6, s7];
+
+/* ---------- captions (white text, dark pill) ---------- */
+const CAP_ON = !new URLSearchParams(location.search).has('nocaps');
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); if (LS) ctx.letterSpacing = '0px'; ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+function draw(traw) {
+  const t = warp(traw); T = t; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  const i = sceneAt(t), t0 = SCENES[i], t1 = SCENES[i + 1] ?? 1e9; FN[i](t - t0, t, t1);
+  if (i > 0 && t - t0 < .05) { ctx.fillStyle = C.blue; ctx.globalAlpha = .9; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  captions(t);
+}
+
+/* ---------- player + optional voice.mp3 in sync ---------- */
+const q = new URLSearchParams(location.search); if (q.has('clean')) document.body.classList.add('clean');
+let t = q.has('t') ? clamp(+q.get('t'), 0, DUR - .001) : 0, playing = !q.has('t'), prev = null;
+const au = new Audio('voice.mp3'); let auOK = false; au.addEventListener('canplay', () => { auOK = true; }); au.addEventListener('error', () => { auOK = false; });
+const bar = document.getElementById('bar'), fillEl = document.getElementById('fill'), info = document.getElementById('info');
+SCENES.slice(1).forEach(b => { const e = document.createElement('i'); e.className = 'tick'; e.style.left = (b / DUR * 100) + '%'; bar.appendChild(e); });
+function syncAudio() { if (!auOK) return; if (playing) { if (au.paused) { au.currentTime = t; au.play().catch(() => {}); } else if (Math.abs(au.currentTime - t) > .15) au.currentTime = t; } else if (!au.paused) au.pause(); }
+function frame(now) {
+  if (playing && prev !== null) { t += Math.min(.1, (now - prev) / 1000); if (t >= DUR) { t = 0; if (auOK) au.currentTime = 0; } }
+  prev = now; draw(t); syncAudio(); fillEl.style.width = (t / DUR * 100) + '%';
+  info.textContent = `${TITLE} · ${t.toFixed(1)} / ${DUR}s${auOK ? ' · voice.mp3 ✓' : ' · no voice.mp3'}${playing ? '' : ' · paused'}`;
+  requestAnimationFrame(frame);
+}
+addEventListener('keydown', e => { const k = e.key.toLowerCase(), i = sceneAt(t);
+  if (k === ' ') { playing = !playing; e.preventDefault(); } else if (k === 'r') { t = 0; playing = true; if (auOK) au.currentTime = 0; }
+  else if (k === 'arrowright') t = SCENES[Math.min(SCENES.length - 1, i + 1)]; else if (k === 'arrowleft') t = SCENES[t - SCENES[i] > .3 ? i : Math.max(0, i - 1)];
+  else if (k === 'h') document.body.classList.toggle('clean');
+  else if (k === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+bar.onclick = e => { const r = bar.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width) * DUR * .9999; };
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { t = s; playing = false; draw(t); };
+Promise.race([Promise.all(['900 64px Inter', '700 46px Inter', '700 40px "JetBrains Mono"'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 1500))]).finally(() => requestAnimationFrame(frame));
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+What if you paid the big AI once,
+and then never again?
+Normally, you pay a model
+for every single decision.
+A thousand tickets, a thousand bills.
+An open-source project called STROT flips that.
+You write the rule in plain English,
+and a big model compiles it, once.
+After that, every decision
+runs on a small local model.
+About sixty milliseconds, || About 60 milliseconds,
+zero API calls, zero cost per ticket.
+On a routing test of three hundred ninety-eight records, || On a routing test of 398 records,
+the project measured ninety-two point five percent accuracy, || the project measured 92.5% accuracy,
+versus seventy-four point eight for the same model without compiling. || versus 74.8 for the same model without compiling.
+My test: compiled,
+versus paying a big model for every ticket.
+Accuracy, next to the bill.
+Pay once. Run free.

@@ -1,0 +1,20 @@
+Your AI agent thinks out loud,
+and you pay for every word.
+Before it acts,
+it writes out its reasoning,
+and every one of those tokens
+lands on your bill.
+A new paper, Hybrid Reasoning Agents,
+lets the agent think silently,
+inside the model,
+and use words only for tool calls and answers.
+Across eleven benchmarks: || Across 11 benchmarks:
+about ten percent better, || about 10% better,
+thirty-five to fifty-five percent fewer tokens, || 35 to 55% fewer tokens,
+and two point seven to three point seven times cheaper. || and 2.7 to 3.7× cheaper.
+Those are the authors' numbers, || Those are the authors’ numbers,
+and the code and models are public.
+So I'm testing it on my DGX Spark. || So I’m testing it on my DGX Spark.
+Thinking out loud, versus thinking silently,
+with the token meter running.
+Half the receipt might be optional.
