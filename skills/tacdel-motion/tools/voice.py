@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Voice takes straight from the ElevenLabs API, with word timings, then pick the best one.
 
-  ELEVENLABS_API_KEY=... ELEVENLABS_VOICE_ID=... python3 voice.py script.txt [out_dir]
+  python3 voice.py script.txt [out_dir]
+
+ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID come from the environment, or from ~/.tacdel.env (KEY=value
+lines, outside any repo) when they are not set there.
 
 Calls text-to-speech "with-timestamps" on eleven_multilingual_v2 twice. It sends no voice_settings, so
 the voice's stored settings apply (see "One-time setup" in SKILL.md). Writes take1.mp3/take2.mp3 and
@@ -14,6 +17,15 @@ import base64, json, os, re, shutil, subprocess, sys, urllib.error, urllib.reque
 TAKES = 2
 MODEL = 'eleven_multilingual_v2'
 HERE = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.expanduser('~/.tacdel.env')
+
+def creds():
+    env = {k: os.environ.get(k, '') for k in ('ELEVENLABS_API_KEY', 'ELEVENLABS_VOICE_ID')}
+    if not all(env.values()) and os.path.exists(ENV_FILE):
+        for line in open(ENV_FILE, encoding='utf-8'):
+            k, sep, v = line.strip().removeprefix('export ').partition('=')
+            if sep and k.strip() in env and not env[k.strip()]: env[k.strip()] = v.strip().strip('"\'')
+    return env['ELEVENLABS_API_KEY'], env['ELEVENLABS_VOICE_ID']
 
 def speak(text, key, voice):
     req = urllib.request.Request(f'https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps',
@@ -46,8 +58,8 @@ def words_from_alignment(al):
 
 def main():
     if len(sys.argv) < 2: sys.exit(__doc__.strip().splitlines()[2].strip())
-    key, voice = os.environ.get('ELEVENLABS_API_KEY'), os.environ.get('ELEVENLABS_VOICE_ID')
-    if not key or not voice: sys.exit('set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in the environment')
+    key, voice = creds()
+    if not key or not voice: sys.exit('set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in the environment or ~/.tacdel.env')
     script = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '.'
     os.makedirs(out, exist_ok=True)
     text = open(script, encoding='utf-8').read().strip()
