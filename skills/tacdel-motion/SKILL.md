@@ -17,6 +17,7 @@ The files live in `github.com/Tacdelgineer/ai-dev-skills` under `skills/tacdel-m
 | `looks/*.script.txt`, `*.chunks.txt` | The script and caption chunks each example was built from. |
 | `tools/sound.py` | Mixer. It plays sound effects at the page's `CUES`, writes an original score from the page's `MUSIC` sections (one palette per look), ducks the music under the voice and outputs a loudness-normalised AAC. |
 | `tools/sfx/*.mp3` | Sound-effect library made with ElevenLabs Sound Effects v2: stamp, stampede, paint, printer, whistle, pages, scratch, tada, drone, press, sizzle, conveyor, register, typing, drawer, buzzer. |
+| `tools/voice.py` | Voice without the connector: 2 takes from the ElevenLabs API with word timings, then `pick_take.py`. Reads `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` from the environment. |
 | `tools/pick_take.py` | Picks the best of 4 voice takes without listening: transcript match, pace and longest pause. |
 | `tools/grab.cjs` | Contact sheet with timestamps at any size (`node grab.cjs page out.png 300 6 t1 t2 …`). |
 | `tools/still.cjs` | One clean 1080x1920 frame without captions, used for thumbnails. |
@@ -24,7 +25,7 @@ The files live in `github.com/Tacdelgineer/ai-dev-skills` under `skills/tacdel-m
 | `tools/retime.sh` | Re-times a finished page to a different take, then remixes and renders. |
 | `references/script-soul.md` | How the script must sound, with a before/after example. **Read it before writing.** |
 
-Needs Node with `playwright`, Python 3 with numpy and scipy, and `ffmpeg`.
+Needs Node with `playwright` (`npm install` at the repo root, then `npx playwright install chromium`), Python 3 with numpy and scipy, and `ffmpeg`.
 
 ## One-time setup: the voice settings
 
@@ -44,6 +45,7 @@ To check they took effect, look at the pace: `pick_take.py` should report about 
    - For each take, run `creative_add_flow_asset_node` (its generation_id), then `creative_transcribe_audio` (`eleven_scribe_v1`, connect_from that node). Poll once, then curl each `words_download_url` to `take1..4.words.json`.
    - Run `python3 tools/pick_take.py script.txt take*.words.json`. Keep the winner as `voice.mp3` + `words.json`. Pin it on the flow with `creative_add_flow_asset_node`, labelled "Chosen take (synced to video)", so Alireza can hear it.
    - If the pace warning fires, say so; it's the voice-settings check.
+   - **With an API key instead of the connector** (Claude Code): `python3 tools/voice.py script.txt <episode dir>` replaces the bullets above. It makes 2 takes on the stored settings, takes word timings from the TTS alignment instead of Scribe, runs `pick_take.py` and leaves `voice.mp3` + `words.json`. Keep keys and voice ids in the environment, never in files.
 5. **Timing.** Run `python3 ../tacdel-shorts/tools/timing.py caps words.json chunks.txt` to get `CAPS`. Set `DUR` = last end + about 1.6 s, and `PAGE_END` = the same number.
 6. **Animate.** Copy the closest `looks/*.html` and keep its helpers, Tac, captions function, player block, `WARP`/`warp`, `PAGE_END`, `LOOK`, the `?pending` tag and `Object.assign(window, …)`. Replace `CAPS`, `DUR`, the scene functions, `CUES` and `MUSIC`. Key every move to `S(k)` (start of chunk k), `E(k)` or `M(k, f)`.
    - Frame 0 is the hook: the title and Tac are fully visible, with no fade-in.

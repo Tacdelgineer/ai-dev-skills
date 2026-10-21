@@ -1,0 +1,8 @@
+{
+  "name": "ai-dev-skills",
+  "private": true,
+  "description": "Node deps for the skills' render and capture tools",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}
