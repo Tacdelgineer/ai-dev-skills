@@ -1,0 +1,32 @@
+Halfway through a long chat,
+you mention one thing that matters:
+you're vegetarian.
+An hour later,
+your AI plans you a dinner
+at a steakhouse.
+So what happened?
+Let's look inside.
+Every message becomes a box
+on a workbench.
+The bench is everything
+the AI can see at once,
+and it only fits so much.
+As the chat grows,
+your box ends up in the middle.
+It's still there,
+but researchers found
+models use the start and end best,
+so the middle gets overlooked.
+When the bench is full,
+boxes actually leave.
+Some apps drop the oldest.
+Some squash them into a summary,
+and details fall out.
+Some move them to storage,
+and fetch the right one when needed.
+That's how your box comes back.
+Vegetarian ramen.
+Much better.
+If something matters,
+say it again,
+or save it to your AI's memory.

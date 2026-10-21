@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Why AI Forgets · tacdel</title>
+<!--
+  tacdel Short · Ep 3 "Why AI forgets things" · Tiny AI Factory · 1080x1920 · 30 fps
+  Mascot: Tac (one-eyed robot, cyan body, orange eye ring, orange antenna ball) runs the factory.
+  Two different things on screen, kept apart on purpose:
+   1) OVERLOOKED: the box is still on the bench (in the context) but sits in the dim middle — Liu et al., "Lost in the Middle", 2023 (arXiv 2307.03172).
+   2) LEAVES THE BENCH when it is full: dropped (truncation), squashed (summary / compaction, details lost), or stored and fetched back (retrieval / memory) —
+      Anthropic, "Effective context engineering for AI agents", Sep 2025. Different apps do different things.
+  URL ?clean · ?nocaps · ?pending (review tag) · ?t=12 freezes a moment · Space play/pause · R restart
+-->
+<style>
+  html,body{margin:0;height:100%;background:#f3e3d3}
+  body{display:flex;align-items:center;justify-content:center}
+  canvas{height:100vh;max-width:100vw;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3);
+const eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.9; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const SANS = '"Inter","Helvetica Neue",Arial,sans-serif';
+const Q = new URLSearchParams(location.search), CAP_ON = !Q.has('nocaps'), PENDING = Q.has('pending');
+
+/* ---------- timing (captions from the voice; ESTIMATED until the real take is transcribed) ---------- */
+const CAPS = [
+  ['Halfway through a long chat,', 0.12, 1.72],
+  ['you mention one thing that matters:', 1.92, 3.93],
+  ['you\'re vegetarian.', 4.12, 5.04],
+  ['An hour later,', 5.53, 6.32],
+  ['your AI plans you a dinner', 6.51, 8.1],
+  ['at a steakhouse.', 8.73, 9.63],
+  ['So what happened?', 10.12, 11.07],
+  ['Let\'s look inside.', 11.55, 12.51],
+  ['Every message becomes a box', 12.99, 14.6],
+  ['on a workbench.', 14.65, 15.5],
+  ['The bench is everything', 15.98, 17.34],
+  ['the AI can see at once,', 17.39, 18.77],
+  ['and it only fits so much.', 18.96, 20.44],
+  ['As the chat grows,', 20.93, 21.97],
+  ['your box ends up in the middle.', 22.16, 24.0],
+  ['It\'s still there,', 24.48, 25.38],
+  ['but researchers found', 25.57, 26.79],
+  ['models use the start and end best,', 26.84, 28.84],
+  ['so the middle gets overlooked.', 29.03, 30.75],
+  ['When the bench is full,', 31.23, 32.57],
+  ['boxes actually leave.', 32.76, 33.93],
+  ['Some apps drop the oldest.', 34.41, 35.91],
+  ['Some squash them into a summary,', 36.4, 38.25],
+  ['and details fall out.', 38.44, 39.64],
+  ['Some move them to storage,', 40.13, 41.63],
+  ['and fetch the right one when needed.', 41.82, 43.92],
+  ['That\'s how your box comes back.', 44.41, 46.15],
+  ['Vegetarian ramen.', 46.63, 47.55],
+  ['Much better.', 48.04, 48.69],
+  ['If something matters,', 49.18, 50.34],
+  ['say it again,', 50.53, 51.28],
+  ['or save it to your AI\'s memory.', 51.47, 53.25],
+];
+const DUR = 54.9;
+const PAGE_END = 54.9; // page-time end (DUR above is rewritten to video length when re-timed)
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const S = k => CAPS[k][1], E = k => CAPS[k][2], M = (k, f) => lerp(S(k), E(k), f);
+
+/* ---------- isometric world (two origins: outside, inside) ---------- */
+let K = 100, CS = K * .84, CHh = K * .58, OX = 471, OY = 836;
+const world = (k, ox, oy) => { K = k; CS = k * .84; CHh = k * .58; OX = ox; OY = oy; };
+const iso = (x, y, z = 0) => [OX + (x - y) * CS, OY + (x + y) * CHh - z * K];
+const poly = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); };
+function cuboid(x, y, z, w, d, h, top, left, right, line = 'rgba(40,30,30,.18)') {
+  const A = iso(x, y, z + h), B = iso(x + w, y, z + h), C = iso(x + w, y + d, z + h), D = iso(x, y + d, z + h), E = iso(x + w, y + d, z), F = iso(x, y + d, z), G = iso(x + w, y, z);
+  ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = line;
+  poly([D, C, E, F]); ctx.fillStyle = left; ctx.fill(); ctx.stroke();
+  poly([B, C, E, G]); ctx.fillStyle = right; ctx.fill(); ctx.stroke();
+  poly([A, B, C, D]); ctx.fillStyle = top; ctx.fill(); ctx.stroke();
+}
+function onFront(x, y, zTop, fn) { const [sx, sy] = iso(x, y, zTop); ctx.save(); ctx.transform(CS, CHh, 0, K, sx, sy); fn(); ctx.restore(); }
+function onRight(x, y, zTop, fn) { const [sx, sy] = iso(x, y, zTop); ctx.save(); ctx.transform(-CS, CHh, 0, K, sx, sy); fn(); ctx.restore(); }
+function onTop(x, y, z, fn) { const [sx, sy] = iso(x, y, z); ctx.save(); ctx.transform(CS, CHh, -CS, CHh, sx, sy); fn(); ctx.restore(); }
+const TAPE = ['#ff6b5a', '#4fb3d9', '#8e7cf0', '#ffb347', '#ff9fb2', '#4fb3d9', '#8e7cf0', '#ff6b5a', '#ffb347', '#4fb3d9', '#ff9fb2'];
+const GREEN = '#5cc98b', GREEN2 = '#3fae72', GREEN3 = '#2f9460', INK = '#2b3440', CORAL = '#ff8a6b', RED = '#e2554f', GOLD = '#ffd65e';
+function leaf(cx, cy, s, rot = .6) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.fillStyle = '#e9fff1'; ctx.beginPath(); ctx.ellipse(0, 0, s, s * .5, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = GREEN3; ctx.lineWidth = s * .12; ctx.beginPath(); ctx.moveTo(-s * .9, 0); ctx.lineTo(s * .8, 0); ctx.stroke(); ctx.restore(); }
+function box(x, y, z, w, h, i, o = {}) { // a message box; green = the one that matters
+  const g = o.green, d = w; ctx.save(); ctx.globalAlpha *= (o.a ?? 1);
+  if (o.shadow !== false && z < 1.5) onTop(x - .05, y + .07, (o.floor ?? 0) + .001, () => { ctx.fillStyle = 'rgba(20,30,40,.2)'; ctx.beginPath(); ctx.roundRect(0, 0, w + .12, d + .08, .08); ctx.fill(); });
+  cuboid(x, y, z, w, d, h, g ? '#8fe3b0' : '#ecc28c', g ? GREEN : '#d9a265', g ? GREEN2 : '#c0874b');
+  if (!o.bare) onTop(x, y, z + h, () => { ctx.fillStyle = g ? '#e9fff1' : TAPE[i % TAPE.length]; ctx.fillRect(w * .4, 0, w * .2, d); if (g) leaf(w * .5, d * .5, w * .26); });
+  if (o.glow > 0) { const P = [iso(x, y, z + h), iso(x + w, y, z + h), iso(x + w, y + d, z + h), iso(x + w, y + d, z), iso(x, y + d, z), iso(x, y + d, z + h)];
+    poly(P); ctx.strokeStyle = `rgba(255,255,255,${o.glow})`; ctx.lineWidth = 6; ctx.shadowColor = g ? '#9dffc4' : '#fff'; ctx.shadowBlur = 20; ctx.stroke(); }
+  ctx.restore(); }
+function txt(s, x, y, size, col = INK, align = 'center', wt = 800, a = 1) { if (a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.font = `${wt} ${size}px ${SANS}`; ctx.textAlign = align; ctx.fillStyle = col; ctx.letterSpacing = size > 60 ? `${-size * .025}px` : '0px'; ctx.fillText(s, x, y); ctx.restore(); }
+function pill(s, x, y, size, bg, fg, a = 1) { if (a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.font = `900 ${size}px ${SANS}`; const w = ctx.measureText(s).width + size * 1.2;
+  ctx.fillStyle = bg; ctx.shadowColor = 'rgba(60,30,20,.25)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4; ctx.beginPath(); ctx.roundRect(x - w / 2, y - size * .85, w, size * 1.5, size * .75); ctx.fill(); ctx.restore(); txt(s, x, y + size * .2, size, fg, 'center', 900, a); }
+
+/* ---------- Tac (factory palette) ---------- */
+const N = 120, TH = Array.from({ length: N }, (_, k) => -Math.PI / 2 + k / N * 2 * Math.PI);
+const superE = (a, b, n) => TH.map(th => { const c = Math.cos(th), s = Math.sin(th); return [a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]; });
+function trace(pts) { ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+const BODYP = superE(.5, .44, 3.4);
+function tac(x, y, s, o = {}) {
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = 'rgba(80,50,50,.2)'; ctx.beginPath(); ctx.ellipse(0, s * .58, s * .42, s * .08, 0, 0, 7); ctx.fill();
+  ctx.rotate(o.rot || 0); ctx.scale(s, s);
+  ctx.fillStyle = '#2a86b5'; ctx.beginPath(); ctx.roundRect(-.29, .34, .17, .24, .07); ctx.roundRect(.12, .34, .17, .24, .07); ctx.fill();
+  ctx.strokeStyle = '#3aa0cf'; ctx.lineWidth = .05; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -.42); ctx.lineTo(0, -.6); ctx.stroke();
+  ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.arc(0, -.64, .08, 0, 7); ctx.fill();
+  const arm = (ax, ay, bx, by) => { ctx.strokeStyle = '#3aa0cf'; ctx.lineWidth = .11; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); };
+  if (o.thumbs) { arm(.45, .05, .72, -.28); ctx.fillStyle = '#3aa0cf'; ctx.beginPath(); ctx.arc(.74, -.3, .09, 0, 7); ctx.fill(); ctx.fillRect(.7, -.52, .07, .22); }
+  const g = ctx.createLinearGradient(0, -.44, 0, .44); g.addColorStop(0, '#7fd0ee'); g.addColorStop(1, '#3a9cc8'); trace(BODYP); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(40,30,30,.18)'; ctx.lineWidth = .02; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.ellipse(-.22, -.26, .15, .07, -.5, 0, 7); ctx.fill();
+  const ey = -.04, er = .25;
+  if (o.happy) { ctx.strokeStyle = INK; ctx.lineWidth = .06; ctx.beginPath(); ctx.arc(0, ey + .07, .15, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); }
+  else { ctx.fillStyle = '#fbf8f2'; ctx.beginPath(); ctx.arc(0, ey, er, 0, 7); ctx.fill(); ctx.strokeStyle = '#ff8a3d'; ctx.lineWidth = .07; ctx.stroke();
+    const lx = clamp(o.lx || 0, -1, 1) * .1, ly = clamp(o.ly || 0, -1, 1) * .09; ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(lx, ey + ly, .105, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx - .035, ey + ly - .04, .03, 0, 7); ctx.fill(); }
+  if (o.palm) { arm(-.45, .05, -.12, -.12); ctx.fillStyle = '#3aa0cf'; ctx.beginPath(); ctx.ellipse(-.06, -.12, .16, .12, .3, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+
+/* ---------- SFX cues + music sections (page time) ---------- */
+const CUES = []; const cue = (t, s, g = 1, r = 1, off = 0, len = 0) => CUES.push([+t.toFixed(3), s, g, r, off, len]);
+const DIVE = S(7) - .1, OUT = S(27) - .35;
+// outside: chat bubbles land on the lane and become boxes
+const BUBS = []; for (let k = 0; k < 16; k++) { const t0 = k < 6 ? .15 + k * .62 : S(3) + (k - 6) * .26; if (t0 > S(5) - .2) break; BUBS.push({ t0, green: k === 5 }); }
+BUBS.forEach(b => cue(b.t0 + .55, b.green ? 'sparkle' : 'pop', b.green ? .55 : .35, b.green ? 1 : 1 + rnd(b.t0) * .3));
+cue(S(3) + .05, 'whoosh', .4, 1.4); for (let k = 0; k < 6; k++) cue(S(3) + .1 + k * .2, 'tick', .3, 1.2);
+cue(S(5) - .08, 'scratch', .85); cue(S(5) + .05, 'sizzle', .55, 1, 0, 1.8);
+cue(DIVE, 'whoosh', .7, .7); cue(DIVE + .4, 'riser', .25);
+// inside
+const NS = 7, SX = s => .55 + s * .8, BZ = .95, BW = .6, BH = .5, BY = 2.12, HATCH = 6.25;
+const ARRV = [S(8) + .15, S(8) + .65, S(9) + .2, S(12) + .3, S(13) + .1, M(14, .1), M(14, .45)]; const GI = 3; // the green box is the 4th message
+ARRV.forEach((a, i) => { cue(a, 'pop', .45, 1 + i * .04); cue(a + .05, 'click', .3); });
+cue(S(10) + .1, 'thunk', .4, 1.5); cue(S(12) + .55, 'sparkle', .45);
+cue(S(13), 'conveyor', .25, 1, 0, 2.4);
+cue(S(16) + .1, 'hum', .35, 1, 0, 0);
+cue(S(19) + .05, 'alarm', .55); cue(S(19) + .35, 'boing', .35, 1.3);
+[0, .18, .36].forEach((d, k) => cue(S(20) + .1 + d, 'thunk', .45, 1.3 + k * .1));
+cue(S(21) + .15, 'whoosh', .5, 1.1); cue(S(21) + .65, 'thunk', .5); cue(S(21) + .95, 'swish', .3);
+cue(S(22) + .45, 'press', .7); cue(S(23) + .05, 'sparkle', .35, .7);
+cue(S(24) + .1, 'swish', .45); cue(S(24) + .55, 'drawer', .4); cue(S(25) - .1, 'drone', .45, 1, 0, 3.2); [0, .3, .6].forEach(d => cue(S(25) + .5 + d, 'beep', .25, 1.4));
+cue(S(26) + .55, 'click', .6); cue(S(26) + .6, 'sparkle', .55);
+cue(OUT, 'whoosh', .55, .9); cue(S(27) + .1, 'chime', .55); cue(S(27) + .3, 'steam', .45); cue(S(28) + .05, 'wink', .5);
+cue(S(30) + .05, 'pop', .55); cue(S(30) + .1, 'sparkle', .4); cue(S(31) + .3, 'swish', .45); cue(S(31) + 1.0, 'drawer', .7); cue(S(31) + 1.25, 'lock', .7); cue(PAGE_END - 1.0, 'ding', .35, .75);
+const MUSIC = [[0, 'intro'], [S(5) - .08, 'steak'], [DIVE + .2, 'inside'], [S(15), 'middle'], [S(19), 'full'], [S(26), 'back'], [S(27), 'resolve'], [PAGE_END, 'end']];
+const LOOK = 'factory'; // music + sound palette in tools/sound.py
+Object.assign(window, { CUES, MUSIC, DUR, WARP, CAPS, LOOK });
+
+/* ---------- outside: the factory ---------- */
+function sky(t, dark = 0) { const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#f8ecdd'); g.addColorStop(1, '#ead2c6'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,214,170,.55)'; ctx.beginPath(); ctx.arc(880, 420, 130, 0, 7); ctx.fill();
+  for (let k = 0; k < 4; k++) { const x = ((k * 330 + t * (14 + k * 6)) % 1500) - 200, y = 330 + k * 110; ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(x, y, 90, 26, 0, 0, 7); ctx.ellipse(x + 50, y - 18, 60, 30, 0, 0, 7); ctx.fill(); } }
+function puffs(t) { for (let k = 0; k < 6; k++) { const ph = ((t * .45 + k / 6) % 1), [cx, cy] = iso(.2, .35, 3.2); const x = cx + Math.sin(ph * 3 + k) * 18 + ph * 40, y = cy - ph * 240, r = 16 + ph * 46;
+  ctx.fillStyle = `rgba(255,255,255,${.55 * (1 - ph)})`; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); } }
+function steak(cx, cy, s) { ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(0, .06, .62, .3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#9b4a32'; ctx.beginPath(); ctx.ellipse(0, 0, .42, .24, -.15, 0, 7); ctx.fill(); ctx.strokeStyle = '#6e2f1f'; ctx.lineWidth = .05; for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(k * .12 - .1, -.16); ctx.lineTo(k * .12 + .1, .16); ctx.stroke(); }
+  ctx.fillStyle = '#f2e6d4'; ctx.beginPath(); ctx.arc(.3, -.05, .07, 0, 7); ctx.fill(); ctx.restore(); }
+function ramen(cx, cy, s, t) { ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.fillStyle = '#e2554f'; ctx.beginPath(); ctx.arc(0, -.02, .48, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = '#ffe1a8'; ctx.beginPath(); ctx.ellipse(0, -.02, .48, .12, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#f2c46d'; ctx.lineWidth = .035; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(-.1 + k * .07, -.02, .2, .05, 0, 0, Math.PI); ctx.stroke(); }
+  ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(.2, -.06, .07, 0, 7); ctx.arc(-.22, -.05, .06, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = .04; ctx.lineCap = 'round'; for (let k = -1; k <= 1; k++) { ctx.beginPath(); const ph = t * 3 + k; ctx.moveTo(k * .16, -.2); ctx.bezierCurveTo(k * .16 + .08 * Math.sin(ph), -.35, k * .16 - .08 * Math.sin(ph), -.45, k * .16, -.58); ctx.stroke(); }
+  ctx.restore(); }
+function bubble(x, y, s, green, a = 1) { ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = green ? '#e9fff1' : '#fff'; ctx.strokeStyle = green ? GREEN2 : 'rgba(40,30,30,.25)'; ctx.lineWidth = 3;
+  ctx.shadowColor = 'rgba(80,50,50,.2)'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.roundRect(-60, -34, 120, 62, 22); ctx.moveTo(-20, 26); ctx.lineTo(-36, 46); ctx.lineTo(0, 26); ctx.fill(); ctx.shadowColor = 'transparent'; ctx.stroke();
+  if (green) leaf(0, -3, 22); else { ctx.fillStyle = 'rgba(40,50,60,.22)'; ctx.fillRect(-38, -14, 76, 9); ctx.fillRect(-38, 2, 50, 9); } ctx.restore(); }
+function outside(t) {
+  world(100, 471, 836); sky(t);
+  ctx.fillStyle = 'rgba(80,50,50,.16)'; ctx.beginPath(); ctx.ellipse(560, 1480, 440, 76, 0, 0, 7); ctx.fill();
+  cuboid(-.6, 0, -.7, 6.3, 3.4, .7, '#3f5d70', '#2c4555', '#22394a');
+  cuboid(-.5, .2, 0, 2.0, 1.05, 2.2, '#ff8a6b', '#f0664b', '#d4513a');
+  cuboid(.05, .3, 2.2, .35, .35, 1.0, '#c9c2b6', '#b2aa9c', '#9b9384'); puffs(t);
+  // the door on the side where boxes go in
+  onRight(1.5, .42, .85, () => { ctx.fillStyle = '#2a2a33'; ctx.beginPath(); ctx.roundRect(0, 0, .66, .85, [.1, .1, 0, 0]); ctx.fill(); ctx.fillStyle = 'rgba(255,214,94,.25)'; ctx.fillRect(.06, .08, .54, .77); });
+  // the screen: chat → an hour passes → steak → (later) ramen
+  onFront(-.5, 1.25, 2.2, () => { ctx.fillStyle = '#1e2a33'; ctx.beginPath(); ctx.roundRect(.18, .3, 1.64, 1.12, .12); ctx.fill(); ctx.save(); ctx.beginPath(); ctx.roundRect(.18, .3, 1.64, 1.12, .12); ctx.clip();
+    if (t < S(3)) { for (let k = 0; k < 5; k++) { const y = .42 + k * .2 - ((t * .3) % .2), g = k === 3 && t > S(2) - .1; ctx.fillStyle = g ? '#8fe3b0' : (k % 2 ? '#4fb3d9' : '#f4efe6'); ctx.beginPath(); ctx.roundRect(k % 2 ? .3 : .8, y, .9, .12, .06); ctx.fill(); } }
+    else if (t < S(5) - .08) { ctx.strokeStyle = '#f4efe6'; ctx.lineWidth = .05; ctx.beginPath(); ctx.arc(1, .86, .32, 0, 7); ctx.stroke(); const a = (t - S(3)) * 9; ctx.beginPath(); ctx.moveTo(1, .86); ctx.lineTo(1 + Math.cos(a) * .24, .86 + Math.sin(a) * .24); ctx.moveTo(1, .86); ctx.lineTo(1 + Math.cos(a / 12) * .16, .86 + Math.sin(a / 12) * .16); ctx.stroke(); }
+    else if (t < S(27) + .05) { steak(1, .9, .95 + .05 * Math.sin(t * 12)); }
+    else { const fl = eio((t - S(27) - .05) / .3); ctx.save(); ctx.translate(1, .86); ctx.scale(1, Math.max(.02, Math.abs(1 - 2 * fl))); ctx.translate(-1, -.86); if (fl < .5) steak(1, .9, 1); else ramen(1, .95, 1.1, t); ctx.restore(); }
+    ctx.restore(); });
+  if (t > S(5) - .08 && t < S(7)) { const a = clamp((t - S(5) + .1) / .2); const [sx, sy] = iso(.5, 1.25, 3.0); pill('STEAKHOUSE?!', sx + 60, sy - 70, 40, RED, '#fff', a * (1 - clamp((t - S(7) + .3) / .3))); }
+  if (t > S(27) + .2) { const [sx, sy] = iso(.5, 1.25, 3.0); pill('VEGETARIAN RAMEN', sx + 70, sy - 70, 38, GREEN2, '#fff', clamp((t - S(27) - .3) / .3)); }
+  // the lane into the door
+  cuboid(1.5, .35, 0, 4.0, .8, .12, '#6f8b99', '#567382', '#4a6573');
+  onTop(1.5, .35, .121, () => { const off = (-(t * 1.3)) % .35 + .35; ctx.fillStyle = 'rgba(255,255,255,.13)'; for (let x = off; x < 4.0; x += .35) ctx.fillRect(x, .06, .05, .68); });
+  // bubbles → boxes riding into the factory
+  BUBS.forEach((b, k) => { const u = (t - b.t0) / .55; if (u < 0) return; const ride = t - b.t0 - .55, sp = k >= 6 ? 3.2 : 1.1; const x = 5.05 - Math.max(0, ride) * sp;
+    if (u < 1) { const [lx, ly] = iso(5.05, .75, .5); bubble(lerp(lx + 120, lx, eo(u)), lerp(220, ly - 40, u * u), b.green ? 1.15 : 1, b.green, 1); return; }
+    if (x < 1.45) return; const a = clamp((x - 1.45) / .25); box(x - .25, .5, .12, .5, .42, k, { green: b.green, a, glow: b.green ? .6 + .4 * Math.sin(t * 6) : 0, floor: .12 }); });
+  // Tac, the operator
+  const palm = t > S(5) + .05 && t < S(7), happy = t > S(27) + .3;
+  tac(250, 1090 + Math.sin(t * 2.6) * 4, 180, { lx: .7, ly: -.7, palm, thumbs: happy, happy: happy && t < S(29) });
+  if (palm) txt('?!', 340, 930, 70, RED, 'center', 900, clamp((t - S(5) - .1) / .2));
+  // memory drawer at the end
+  if (t > S(29) - .1) { const a = eo((t - S(29) + .1) / .4); ctx.save(); ctx.globalAlpha *= a; const dy = (1 - a) * -1.5;
+    cuboid(3.6, 1.6, 0 + dy, 1.3, 1.0, 1.25, '#f4efe6', '#e6ddd0', '#d3c8b8'); const op = t < S(31) + .95 ? eio((t - S(29) - .2) / .4) : 1 - eio((t - S(31) - .95) / .25);
+    onFront(3.6, 2.6, 1.25 + dy, () => { ctx.fillStyle = '#cfc4b3'; ctx.fillRect(.1, .12, 1.1, .45); ctx.fillStyle = '#bdb19e'; ctx.fillRect(.1, .68, 1.1, .45); });
+    if (op > 0) cuboid(3.7, 2.6, .68 + dy, 1.1, .55 * op, .45, '#e6ddd0', '#d9cfbf', '#c8bca9');
+    ctx.restore(); const [mx, my] = iso(4.25, 2.6, 1.9); pill('MEMORY', mx, my - 40, 34, INK, '#fff', a);
+    if (t > S(31) + 1.25) { const [lx, ly] = iso(4.25, 2.6, .9); ctx.save(); ctx.fillStyle = GOLD; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(lx - 22, ly - 10, 44, 36, 6); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(lx, ly - 12, 14, Math.PI, 0); ctx.stroke(); ctx.restore(); } }
+  // "say it again": a fresh green bubble; then it flies into memory
+  if (t > S(30) - .05) { const u = back((t - S(30)) / .4), fly = eio((t - S(31) - .3) / .65); const [bx, by] = iso(5.05, .75, 1.6), [mx, my] = iso(4.25, 2.9, 1.0);
+    if (fly < 1) bubble(lerp(bx - 40, mx, fly), lerp(by - 60, my, fly) - Math.sin(fly * Math.PI) * 120, 1.25 * clamp(u, 0, 1.2) * (1 - fly * .5), true, 1);
+    if (t > S(30) && fly < .2) pill('I’m vegetarian!', bx - 40, by - 150, 30, GREEN2, '#fff', clamp((t - S(30)) / .2) * (1 - fly * 5)); }
+  if (t > S(31) + 1.4) txt('tacdel', 540, 290, 44, INK, 'center', 900, clamp((t - S(31) - 1.4) / .4));
+}
+
+/* ---------- inside: the workbench ---------- */
+// box i: arrives on the bench, then follows the story (drop / squash / store / fetch)
+const DROP0 = S(21) + .15, SQ0 = S(22) + .2, ST0 = S(24) + .1, FETCH0 = S(25) + .1, BACK0 = S(26) + .15;
+function slotOf(i, t) { // which slot a box sits in at time t (after the first shift)
+  let s = i; if (t > DROP0 + .75 && i >= 2) s = i - 2; return s; }
+function boxPos(i, t) {
+  const a = ARRV[i] ?? 1e9; if (t < a) return null;
+  let x = lerp(HATCH, SX(i), eio((t - a - .15) / (.4 + (HATCH - SX(i)) * .05))), z = BZ, sc = back((t - a) / .25), alpha = 1, sq = 1, bare = false, y = BY;
+  if (i >= 2 && t > DROP0 + .75) x = lerp(SX(i), SX(i - 2), eio((t - DROP0 - .75) / .5));
+  // drop the oldest two off the left end, into the pit
+  if (i < 2 && t > DROP0) { const u = clamp((t - DROP0 - i * .08) / .45); x = lerp(SX(i), -.6, eio(u)); const f = Math.max(0, t - DROP0 - .45 - i * .08); z = BZ - 4 * f * f; alpha = 1 - clamp((f - .4) / .2); if (alpha <= 0) return null; }
+  // squash the three now in slots 2..4 (boxes 4, 5, 6) into one summary
+  if (i >= 4 && i <= 6 && t > SQ0 + .35) { const u = eio((t - SQ0 - .35) / .25); x = lerp(x, SX(3), u); sq = lerp(1, .45, u); if (i !== 5 && u >= 1) return null; if (i === 5) bare = u > .5; }
+  // store: slots 0..1 (boxes 2 and the green 3) go back through the STORE door
+  if ((i === 2 || i === GI) && t > ST0) { const u = eio((t - ST0 - (i - 2) * .15) / .6); if (u >= 1) return i === GI ? { drone: true, i } : { store: true, i };
+    return { x: lerp(x, 4.95, u), z: BZ + Math.sin(u * Math.PI) * 1.4, y: lerp(BY, .55, u), sc: 1 - u * .3, a: 1 - clamp((u - .8) / .2), sq: 1, i }; }
+  return { x, z, y, sc: Math.max(.01, sc), a: alpha, sq, bare, i };
+}
+function inside(t) {
+  world(118, 380, 650);
+  const wall = ctx.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#f6e6d6'); wall.addColorStop(1, '#e6cdbf'); ctx.fillStyle = wall; ctx.fillRect(0, 0, W, H);
+  // floor
+  poly([iso(-1.6, -.2, 0), iso(8.4, -.2, 0), iso(8.4, 4.4, 0), iso(-1.6, 4.4, 0)]); ctx.fillStyle = '#d9c3b3'; ctx.fill();
+  onTop(-1.6, -.2, .001, () => { ctx.strokeStyle = 'rgba(120,90,80,.12)'; ctx.lineWidth = .02; for (let k = 0; k < 11; k++) { ctx.beginPath(); ctx.moveTo(k, 0); ctx.lineTo(k, 4.6); ctx.stroke(); } });
+  // back wall with lamps and three doors
+  cuboid(-.4, -.2, 0, 6.6, .2, 2.8, '#fbf7ef', '#f4efe6', '#e6ddd0');
+  const n = Math.min(NS, ARRV.filter(a => t > a + .3).length - (t > DROP0 + .75 ? 2 : 0) + (t > DROP0 + 1.2 ? 1 : 0)), full = t > S(19) && t < DROP0 + .8, bl = .55 + .45 * Math.sin(t * 10);
+  for (let k = 0; k < NS; k++) onFront(SX(k) - .16, 0, 2.6, () => { const on = k < n; ctx.fillStyle = on ? (full ? `rgba(255,94,74,${bl})` : '#4fc48a') : '#cdc3b4'; ctx.beginPath(); ctx.arc(.16, .16, .1, 0, 7); ctx.fill(); });
+  const DOORS = [[-.05, 'DROP', DROP0], [2.15, 'SQUASH', SQ0], [4.35, 'STORE', ST0]];
+  DOORS.forEach(([dx, name, t0], k) => { const op = eio((t - S(20) - .1 - k * .18) / .4), act = t > t0 - .3 && t < (k === 2 ? BACK0 + .6 : t0 + 1.6);
+    onFront(dx, 0, 2.05, () => { ctx.fillStyle = '#e6ddd0'; ctx.fillRect(0, 0, 1.2, 2.15); ctx.fillStyle = '#3a3330'; ctx.fillRect(.06, .06 + 2.1 * (1 - op), 1.08, 2.09 * op);
+      if (k === 2 && op > .5) { ctx.fillStyle = '#7a6a60'; for (let r = 0; r < 3; r++) ctx.fillRect(.12, .5 + r * .5, .96, .05);
+        const stored = t > ST0 + .5; if (stored) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { const isG = r === 1 && c === 1, gone = isG && t > FETCH0 + 1.0; if (gone) continue;
+          ctx.fillStyle = isG ? GREEN : '#d9a265'; ctx.fillRect(.18 + c * .32, .28 + r * .5, .24, .22); if (isG) { ctx.fillStyle = '#e9fff1'; ctx.fillRect(.27, .28 + r * .5, .06, .22); } } }
+      ctx.strokeStyle = act ? GOLD : 'rgba(40,30,30,.25)'; ctx.lineWidth = act ? .06 : .03; ctx.strokeRect(0, 0, 1.2, 2.15); });
+    const [px, py] = iso(dx + .6, 0, 2.38); pill(name, px, py, 30, act ? INK : '#9a8e80', '#fff', op); });
+  // the bin for dropped boxes
+  onTop(-1.0, 2.05, .002, () => { ctx.fillStyle = '#3a3330'; ctx.beginPath(); ctx.roundRect(0, 0, .85, .8, .12); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(.08, .08, .69, .2); });
+  // the bench + its conveyor top + hatch at the far end
+  cuboid(0, BY - .1, 0, 6.65, .8, BZ - .02, '#a7b8c2', '#8ea2ae', '#7b909c');
+  onTop(0, BY - .1, BZ - .019, () => { const off = (-(t * .9)) % .3 + .3; ctx.fillStyle = 'rgba(255,255,255,.18)'; for (let x = off; x < 6.65; x += .3) ctx.fillRect(x, .06, .04, .68); });
+  const hatchGlow = ARRV.reduce((m, a) => Math.max(m, Math.max(0, 1 - Math.abs(t - a) / .35)), 0);
+  onTop(HATCH - .35, BY - .02, BZ - .018, () => { ctx.fillStyle = '#2a3a44'; ctx.fillRect(0, 0, .7, .64); ctx.fillStyle = `rgba(255,214,94,${.25 + hatchGlow * .6})`; ctx.fillRect(.08, .08, .54, .48); });
+  // light: what the AI can see. A spotlight over the whole bench; later only the ends are bright
+  const spot = clamp((t - S(10)) / .4), ends = eio((t - S(16) - .1) / .5) * (1 - eio((t - S(19)) / .4));
+  if (spot > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const cone = (x0, x1, a) => { const P = [iso(x0, BY - .1, 3.6), iso(x1, BY - .1, 3.6), iso(x1 + .3, BY + .7, BZ), iso(x0 - .3, BY + .7, BZ)]; poly(P); const [gx, gy] = iso((x0 + x1) / 2, BY, 3.2), [hx, hy] = iso((x0 + x1) / 2, BY, BZ);
+      const g = ctx.createLinearGradient(gx, gy, hx, hy); g.addColorStop(0, `rgba(255,236,190,${.05 * a})`); g.addColorStop(1, `rgba(255,236,190,${.28 * a})`); ctx.fillStyle = g; ctx.fill(); };
+    cone(.1, 6.1, spot * (1 - ends)); cone(.1, 1.55, ends); cone(4.55, 6.1, ends); ctx.restore(); }
+  // empty slots: room for so much
+  if (t > S(10) - .1 && t < S(14) + .5) { const a = clamp((t - S(10) + .1) / .3) * (1 - clamp((t - S(14)) / .5));
+    for (let k = 0; k < NS; k++) { const filled = ARRV[k] < t - .4; if (filled) continue; onTop(SX(k) - BW / 2, BY + .02, BZ + .002, () => { ctx.globalAlpha = a; ctx.setLineDash([.08, .06]); ctx.strokeStyle = 'rgba(43,52,64,.55)'; ctx.lineWidth = .035; ctx.strokeRect(0, 0, BW, BW); }); } }
+  // the boxes
+  const list = []; for (let i = 0; i < NS; i++) { const p = boxPos(i, t); if (p && !p.store && !p.drone) list.push(p); }
+  list.sort((a, b) => a.x - b.x);
+  list.forEach(p => { const g = p.i === GI, w = BW * p.sc, h = BH * p.sc * p.sq; let glow = 0;
+    if (g && t > S(12) + .4 && t < S(19)) glow = .45 + .35 * Math.sin(t * 5); if (g && t > S(15) && t < S(16) + .3) glow = .9;
+    box(p.x - w / 2, p.y + (BW - w) / 2, p.z, w, h, p.i, { green: g, a: p.a, glow, floor: BZ, bare: p.bare });
+    if (p.i === 5 && p.sq < .9) { const [lx, ly] = iso(p.x, p.y + .3, p.z + h + .3); pill('SUMMARY', lx, ly - 10, 24, INK, '#fff', clamp((t - SQ0 - .55) / .2) * (1 - clamp((t - ST0 + .2) / .3))); } });
+  // dim middle: overlooked, not gone
+  if (ends > 0) { ctx.save(); ctx.globalAlpha = ends * .42; ctx.fillStyle = '#5a4238'; poly([iso(1.6, BY - .1, BZ + 1.1), iso(4.5, BY - .1, BZ + 1.1), iso(4.5, BY + .7, BZ - .02), iso(1.6, BY + .7, BZ - .02)]); ctx.fill(); ctx.restore(); }
+  // the waiting box that doesn't fit
+  if (t > S(19) + .1 && t < DROP0 + 1.3) { const bump = Math.max(0, Math.sin(clamp((t - S(19) - .3) / .35) * Math.PI)) * .25, enter = eio((t - DROP0 - .8) / .45), x = lerp(HATCH + .1 - bump, SX(5), enter);
+    box(x - BW / 2, BY, BZ, BW, BH, 9, { glow: 0 }); if (enter < .1) { const [lx, ly] = iso(HATCH, BY + .3, BZ + 1.0); pill('NO ROOM', lx, ly, 26, RED, '#fff', clamp((t - S(19) - .3) / .2)); } }
+  // labels
+  if (t > S(15) - .1 && t < S(19)) { const p = boxPos(GI, t), [lx, ly] = iso(p.x, BY + .3, BZ + BH + .55); const a = clamp((t - S(15) + .1) / .25);
+    pill('STILL THERE', lx, ly - 20, 28, GREEN2, '#fff', a); ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = GREEN2; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(lx, ly + 10); ctx.lineTo(lx, ly + 44); ctx.stroke(); ctx.restore(); }
+  if (t > S(16) - .1 && t < S(19)) { const a = clamp((t - S(16) + .1) / .3) * (1 - clamp((t - S(19) + .3) / .3)); const [ax, ay] = iso(.8, BY, BZ + 1.6), [bx, by] = iso(5.3, BY, BZ + 1.6);
+    pill('START', ax, ay, 28, '#fff3d6', INK, a); pill('END', bx, by, 28, '#fff3d6', INK, a); pill('middle: overlooked', (ax + bx) / 2, (ay + by) / 2 + 20, 26, '#5a4238', '#fff', a * clamp((t - S(18)) / .3));
+    txt('Lost in the Middle · 2023 study', 540, 255, 34, INK, 'center', 800, a); }
+  if (t > S(8) - .1 && t < S(10) + .3) txt('1 message = 1 box', 540, 255, 38, INK, 'center', 800, clamp((t - S(8)) / .3) * (1 - clamp((t - S(10)) / .3)));
+  if (t > S(10) && t < S(13)) txt('what it can see at once', 540, 255, 38, INK, 'center', 800, clamp((t - S(10) - .1) / .3) * (1 - clamp((t - S(13) + .3) / .3)));
+  if (t > S(20) - .1 && t < S(21) + .2) txt('different apps do different things', 540, 255, 36, INK, 'center', 800, clamp((t - S(20)) / .3) * (1 - clamp((t - S(21)) / .2)));
+  // the press
+  if (t > SQ0 - .1 && t < SQ0 + 1.4) { const d = t < SQ0 + .35 ? eio((t - SQ0) / .35) : t < SQ0 + .9 ? 1 : 1 - eio((t - SQ0 - .9) / .4), z = lerp(4.2, BZ + BH * .45, d);
+    cuboid(SX(2) - .42, BY - .05, z + .05, SX(4) - SX(2) + .84, BW + .1, .25, '#9aa7b0', '#808f99', '#6f7e88'); const [px0, py0] = iso(SX(3), BY + .3, z + .3), [px1, py1] = iso(SX(3), BY + .3, 5);
+    ctx.strokeStyle = '#6f7e88'; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(px1, py1); ctx.stroke(); }
+  // details fall out: stickers spinning off
+  if (t > SQ0 + .5 && t < SQ0 + 2.2) for (let k = 0; k < 9; k++) { const u = (t - SQ0 - .5 - k * .04); if (u < 0) continue; const [sx, sy] = iso(SX(3) + (k - 4) * .12, BY + .3, BZ + .3);
+    const x = sx + (rnd(k) - .5) * 260 * u, y = sy - 160 * u + 520 * u * u; ctx.save(); ctx.globalAlpha = 1 - clamp((u - 1) / .5); ctx.translate(x, y); ctx.rotate(u * 8 * (rnd(k * 3) - .5)); ctx.fillStyle = TAPE[k % TAPE.length]; ctx.fillRect(-14, -8, 28, 16); ctx.restore(); }
+  // the drone: scans the shelves, fetches the green box, brings it back into the light
+  if (t > FETCH0 - .2 && t < BACK0 + 1.2) { const [d0x, d0y] = iso(4.95, 0, 2.1), [s1x, s1y] = iso(4.95, 0, 1.2), [ex, ey] = iso(SX(6), BY + .3, BZ + 1.6), [lx, ly] = iso(SX(6), BY + .3, BZ + .65);
+    let x, y, carry = false; const u1 = eio((t - FETCH0 + .2) / .5), u2 = eio((t - FETCH0 - 1.0) / .5), u3 = eio((t - BACK0 + .4) / .7), u4 = eio((t - BACK0 - .3) / .3);
+    x = lerp(d0x + 120, d0x, u1) + Math.sin(t * 7) * 6; y = lerp(d0y - 200, d0y, u1);
+    if (t > FETCH0 + .3) { x = lerp(d0x - 50, d0x + 50, (Math.sin((t - FETCH0) * 4) + 1) / 2); }
+    if (t > FETCH0 + 1.0) { x = lerp(x, s1x, u2); y = lerp(y, s1y - 30, u2); carry = t > FETCH0 + 1.45; }
+    if (t > BACK0 - .4) { x = lerp(x, ex, u3); y = lerp(y, ey, u3) - Math.sin(u3 * Math.PI) * 120; }
+    if (t > BACK0 + .3) { y = lerp(ey, ly - 90, u4); }
+    const gone = t > BACK0 + .55, ya = gone ? -eio((t - BACK0 - .55) / .6) * 400 : 0;
+    if (t > FETCH0 + .3 && t < FETCH0 + 1.0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(120,255,190,.25)'; ctx.beginPath(); ctx.moveTo(x, y + 20); ctx.lineTo(x - 70, y + 200); ctx.lineTo(x + 70, y + 200); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    if (carry && !gone) { ctx.save(); ctx.translate(x, y + 60); ctx.fillStyle = GREEN; ctx.fillRect(-26, -20, 52, 44); ctx.fillStyle = '#e9fff1'; ctx.fillRect(-6, -20, 12, 44); ctx.restore(); }
+    drone(x, y + ya, t); }
+  if (t > BACK0 + .5) { const g = clamp((t - BACK0 - .5) / .2); box(SX(6) - BW / 2, BY, BZ, BW, BH, GI, { green: true, glow: .7 + .3 * Math.sin(t * 6), floor: BZ });
+    const [lx, ly] = iso(SX(6), BY + .3, BZ + BH + .5); pill('BACK IN THE LIGHT', lx - 60, ly - 30, 26, GREEN2, '#fff', g); }
+}
+function drone(x, y, t) { ctx.save(); ctx.translate(x, y); ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-44, -8); ctx.lineTo(44, -8); ctx.stroke();
+  [-44, 44].forEach(dx => { ctx.fillStyle = 'rgba(43,52,64,.3)'; ctx.beginPath(); ctx.ellipse(dx, -14, 34, 6 + 3 * Math.sin(t * 60), 0, 0, 7); ctx.fill(); });
+  ctx.fillStyle = '#ff8a6b'; ctx.beginPath(); ctx.roundRect(-26, -10, 52, 30, 12); ctx.fill(); ctx.fillStyle = '#fbf8f2'; ctx.beginPath(); ctx.arc(0, 5, 9, 0, 7); ctx.fill(); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(2, 5, 4, 0, 7); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-14, 20); ctx.lineTo(-18, 40); ctx.moveTo(14, 20); ctx.lineTo(18, 40); ctx.stroke(); ctx.restore(); }
+
+/* ---------- captions (tacdel-shorts style) ---------- */
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.letterSpacing = '0px';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+
+/* ---------- frame ---------- */
+const DOOR_PT = [534, 905];
+function draw(traw) {
+  const t = warp(traw);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([]); ctx.shadowColor = 'transparent';
+  const inT = t > DIVE + .55 && t < OUT + .3;
+  if (!inT) { // outside, with the dive into the door and the pull back out
+    let z = 1; if (t > DIVE && t < DIVE + .7) z = 1 + 7 * Math.pow(eio((t - DIVE) / .7), 2); if (t > OUT - .1 && t < OUT + .5) z = 1 + 6 * Math.pow(1 - eio((t - OUT) / .5), 2);
+    const cam = 1 + .02 * Math.sin(t * .4); ctx.translate(DOOR_PT[0], DOOR_PT[1]); ctx.scale(z * cam, z * cam); ctx.translate(-DOOR_PT[0], -DOOR_PT[1]); outside(t);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); if (t < S(3) + .5) { const a = 1 - clamp((t - S(3)) / .4); ctx.save(); ctx.globalAlpha = a; txt('WHY AI', 540, 300, 112, INK, 'center', 900); txt('FORGETS', 540, 410, 112, RED, 'center', 900); ctx.restore(); }
+    const fd = t > OUT ? 1 - clamp((t - OUT - .3) / .25) : t > DIVE ? clamp((t - DIVE - .35) / .2) : 0; if (fd > 0) { ctx.globalAlpha = fd; ctx.fillStyle = '#2a2a33'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  } else { const z = 1 + .03 * eio((t - DIVE - .55) / 30); ctx.translate(540, 900); ctx.scale(z, z); ctx.translate(-540, -900); inside(t); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const fi = 1 - clamp((t - DIVE - .55) / .35); const fo = clamp((t - OUT + .05) / .3); const f = Math.max(fi, fo); if (f > 0) { ctx.globalAlpha = f; ctx.fillStyle = '#2a2a33'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; } }
+  const f = clamp((t - (PAGE_END - .35)) / .35); if (f > 0) { ctx.globalAlpha = f; ctx.fillStyle = '#f3e3d3'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  captions(t);
+  if (PENDING) { ctx.save(); ctx.font = `700 26px ${SANS}`; ctx.fillStyle = 'rgba(8,8,8,.7)'; ctx.beginPath(); ctx.roundRect(24, 150, 640, 44, 22); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText('REVIEW COPY · voice pending · timing estimated', 44, 173); ctx.restore(); }
+}
+
+/* ---------- player (works with tools/sheet.cjs and tools/render.cjs) ---------- */
+let T = Q.has('t') ? clamp(+Q.get('t'), 0, DUR - .001) : 0, playing = !Q.has('t'), prev = null;
+function frame(now) { if (playing && prev !== null) T = (T + Math.min(.1, (now - prev) / 1000)) % DUR; prev = now; draw(T); requestAnimationFrame(frame); }
+addEventListener('keydown', e => { if (e.key === ' ') { playing = !playing; e.preventDefault(); } else if (e.key.toLowerCase() === 'r') { T = 0; playing = true; } });
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { T = s; playing = false; draw(T); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

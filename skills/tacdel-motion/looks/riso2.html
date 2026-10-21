@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>100 AI Agents · tacdel</title>
+<!--
+  tacdel Short · Ep 1 "What if you had 100 AI agents?" · Riso 2.0 · 1080x1920 · 30 fps
+  Mascot: Tac (one-eyed robot, cyan body, orange eye ring, orange antenna ball).
+  Facts on screen: ~15x tokens vs a normal chat — Anthropic, "How we built our multi-agent research system",
+  Jun 13 2025 (vendor-reported, for that system). Everything else is an illustrated example.
+  Riso look credits: IshaanKalra2103's riso-rooms (MIT) and Kevin Ngo's "a small light, room by room".
+  URL ?clean · ?nocaps · ?pending (review tag) · ?t=12 freezes a moment · Space play/pause · R restart
+-->
+<style>
+  html,body{margin:0;height:100%;background:#d9d0bd}
+  body{display:flex;align-items:center;justify-content:center}
+  canvas{height:100vh;max-width:100vw;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3);
+const eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.7; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const SANS = '"Inter","Helvetica Neue",Arial,sans-serif';
+const Q = new URLSearchParams(location.search), CAP_ON = !Q.has('nocaps'), PENDING = Q.has('pending');
+
+/* ---------- timing (captions from the voice; ESTIMATED until the real take is transcribed) ---------- */
+const CAPS = [
+  ['Imagine you hire', 0.12, 1.07],
+  ['100 AI agents.', 1.12, 2.27],
+  ['They never sleep,', 2.75, 3.71],
+  ['and they have one job:', 3.9, 5.19],
+  ['build me a website.', 5.38, 6.47],
+  ['Here\'s what happens.', 6.96, 8.02],
+  ['All 100 start', 8.5, 9.76],
+  ['on the homepage at once.', 9.81, 11.2],
+  ['Half paint it orange,', 11.69, 12.88],
+  ['half paint it blue,', 13.08, 14.17],
+  ['and they keep painting', 14.37, 15.67],
+  ['over each other.', 15.73, 16.63],
+  ['12 are still researching', 17.11, 18.73],
+  ['what a website is.', 18.79, 19.83],
+  ['And one is building', 20.31, 21.46],
+  ['a calculator nobody asked for.', 21.51, 23.23],
+  ['Meanwhile, your bill climbs,', 23.71, 25.37],
+  ['because every agent costs money', 25.56, 27.38],
+  ['each time it thinks.', 27.43, 28.58],
+  ['When Anthropic tested', 29.07, 30.29],
+  ['its own multi-agent research system,', 30.34, 32.32],
+  ['it used about 15× more tokens', 32.51, 34.82],
+  ['than a normal chat.', 34.88, 35.97],
+  ['So you make one agent', 36.45, 37.74],
+  ['the manager.', 37.8, 38.45],
+  ['It splits the job into pieces,', 38.93, 40.68],
+  ['gives each team one piece,', 40.87, 42.37],
+  ['and puts a checker at the end.', 42.57, 44.35],
+  ['Suddenly', 44.83, 45.29],
+  ['it\'s quiet.', 45.92, 46.47],
+  ['By the afternoon,', 46.95, 47.91],
+  ['you have a website.', 48.1, 49.2],
+  ['The hard part', 49.68, 50.47],
+  ['was never the agents.', 50.53, 51.73],
+  ['It was the plan.', 52.21, 53.14],
+];
+const DUR = 54.8;
+const PAGE_END = 54.8; // page-time end (DUR above is rewritten to video length when re-timed)
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const S = k => CAPS[k][1], E = k => CAPS[k][2], M = (k, f) => lerp(S(k), E(k), f);
+
+/* ---------- riso: two inks, halftone screens, paper ---------- */
+const PAPER = '#f2ead7', CYAN = '#0b95d2', ORANGE = '#ff6a2a', DARK = '#1b2a4a';
+function screen(col, step, r, ang) { const s = document.createElement('canvas'); s.width = s.height = step; const g = s.getContext('2d');
+  g.fillStyle = col; g.beginPath(); g.arc(step / 2, step / 2, r, 0, 7); g.fill(); return { p: ctx.createPattern(s, 'repeat'), m: new DOMMatrix().rotateSelf(ang) }; }
+const P = { c: screen(CYAN, 12, 3.8, 15), cL: screen(CYAN, 12, 1.9, 15), o: screen(ORANGE, 11, 3.6, 75), oL: screen(ORANGE, 11, 1.8, 75), d: screen(DARK, 10, 2.2, 45) };
+const pat = s => { s.p.setTransform(ctx.getTransform().invertSelf().multiplySelf(s.m)); return s.p; };
+const GRAIN = [0, 1, 2].map(k => { const g = document.createElement('canvas'); g.width = 540; g.height = 960; const x = g.getContext('2d'), im = x.createImageData(540, 960);
+  for (let i = 0; i < im.data.length; i += 4) { const v = 120 + rnd(i * .37 + k * 9.1) * 135; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = rnd(i * .91 + k) < .5 ? 26 : 0; }
+  x.putImageData(im, 0, 0); return g; });
+const inkCol = k => k === 'o' ? ORANGE : CYAN, other = k => k === 'o' ? 'c' : 'o';
+
+/* ---------- shapes on shared angles (any shape can morph into any other) ---------- */
+const N = 120, TH = Array.from({ length: N }, (_, k) => -Math.PI / 2 + k / N * 2 * Math.PI);
+const polar = f => TH.map(a => { const r = f(a); return [Math.cos(a) * r, Math.sin(a) * r]; });
+const superE = (a, b, n) => TH.map(th => { const c = Math.cos(th), s = Math.sin(th); return [a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]; });
+const lobes = (k, rIn, rOut, p = 2.4) => polar(a => rIn + (rOut - rIn) * Math.pow(Math.abs(Math.cos(k / 2 * (a + Math.PI / 2))), p));
+const SH = { blob: polar(a => 80 * (1 + .14 * Math.sin(3 * a + 1) + .07 * Math.sin(5 * a + 2))), burst: polar(a => 70 + 34 * Math.pow(Math.abs(Math.sin(9 * a)), .6)),
+  star: lobes(5, 50, 112, 2.2), splat: polar(a => 70 * (1 + .35 * Math.pow(Math.abs(Math.sin(4 * a + 1)), 3) + .18 * Math.sin(7 * a))) };
+const mix = (A, B, u) => A.map(([x, y], k) => [lerp(x, B[k][0], u), lerp(y, B[k][1], u)]);
+function trace(pts) { ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+function print(pts, x, y, sx, sy, rot, ink, a = 1) {
+  if (a <= 0) return; const two = ink === 'oc', o = ink === 'o';
+  ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'multiply';
+  ctx.save(); ctx.translate(x + 12, y + 14); ctx.rotate(rot); ctx.scale(sx, sy); trace(pts); ctx.fillStyle = pat(o ? P.c : P.o); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, sy); trace(pts); ctx.fillStyle = two ? CYAN : (o ? ORANGE : CYAN); ctx.fill();
+  ctx.fillStyle = pat(two ? P.o : (o ? P.oL : P.cL)); ctx.fill(); ctx.restore();
+  ctx.restore();
+}
+function printText(s, x, y, size, a = 1, wt = 900, align = 'center') {
+  if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'multiply'; ctx.font = `${wt} ${size}px ${SANS}`; ctx.textAlign = align; ctx.letterSpacing = `${-size * .04}px`;
+  ctx.fillStyle = pat(P.o); ctx.fillText(s, x + size * .07, y + size * .07); ctx.fillStyle = CYAN; ctx.fillText(s, x, y); ctx.restore(); }
+function label(s, x, y, size, col = DARK, align = 'center', wt = 800, a = 1) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = col === PAPER ? 'source-over' : 'multiply';
+  ctx.font = `${wt} ${size}px ${SANS}`; ctx.textAlign = align; ctx.fillStyle = col; ctx.fillText(s, x, y); ctx.restore(); }
+function card(x, y, w, h, r, ink, o = {}) {
+  const a = o.a ?? 1; if (a <= 0) return; ctx.save(); ctx.globalAlpha = a;
+  if (o.paper) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = PAPER; ctx.fill(); }
+  ctx.globalCompositeOperation = 'multiply';
+  if (!o.noShadow) { ctx.beginPath(); ctx.roundRect(x + 12, y + 14, w, h, r); ctx.fillStyle = pat(ink === 'o' ? P.c : P.o); ctx.fill(); if (o.paper) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = PAPER; ctx.fill(); ctx.globalCompositeOperation = 'multiply'; } }
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+  if (o.fill !== false && !o.paper) { ctx.fillStyle = o.light ? pat(ink === 'o' ? P.oL : P.cL) : inkCol(ink); ctx.fill(); }
+  if (o.stroke) { ctx.lineWidth = o.lw || 8; ctx.strokeStyle = o.stroke; if (o.dash) { ctx.setLineDash(o.dash); ctx.lineDashOffset = o.dashOff || 0; } ctx.stroke(); }
+  ctx.restore();
+}
+function stampMark(txt, x, y, size, rot, u, ink = 'o') { // a rubber stamp: slams in big, settles
+  if (u <= 0) return; const sc = lerp(1.9, 1, eo(u / .35)), a = clamp(u / .12);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc, sc); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'multiply';
+  ctx.font = `900 ${size}px ${SANS}`; ctx.letterSpacing = `${size * .02}px`; const w = ctx.measureText(txt).width + size * .9, h = size * 1.45;
+  ctx.lineWidth = size * .13; ctx.strokeStyle = inkCol(ink); ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, size * .25); ctx.stroke();
+  ctx.fillStyle = inkCol(ink); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, size * .05);
+  ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = pat(P.oL); ctx.globalAlpha = a * .5; ctx.fillRect(-w, -h, w * 2, h * 2); ctx.restore();
+}
+function sparkle(x, y, r, u, ink = 'o') { if (u <= 0 || u >= 1) return; const s = Math.sin(u * Math.PI) * r;
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = inkCol(ink); ctx.translate(x, y); ctx.rotate(u * 2);
+  ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, rr = k % 2 ? s * .28 : s; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.restore(); }
+
+/* ---------- Tac and the crew: one-eyed robots (unit = body width) ---------- */
+const BODYP = superE(.5, .44, 3.4);
+function bot(x, y, s, ink, o = {}) {
+  if (s <= 0.5) return; const col = inkCol(ink), ring = o.tac ? ORANGE : inkCol(other(ink));
+  ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.scale(s * (o.sx || 1), s * (o.sy || 1)); ctx.globalAlpha = o.a ?? 1;
+  ctx.globalCompositeOperation = 'multiply';
+  const st = o.step || 0, l1 = Math.max(0, Math.sin(st)) * .07, l2 = Math.max(0, -Math.sin(st)) * .07;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-.29, .34 - l1, .17, .23, .07); ctx.roundRect(.12, .34 - l2, .17, .23, .07); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = .055; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -.42); ctx.quadraticCurveTo(o.ant || 0, -.52, (o.ant || 0) * 1.4, -.6); ctx.stroke();
+  ctx.fillStyle = o.tac ? ORANGE : col; ctx.beginPath(); ctx.arc((o.ant || 0) * 1.4, -.64, o.tac ? .085 : .065, 0, 7); ctx.fill();
+  if (o.halo) { ctx.save(); ctx.globalCompositeOperation = 'source-over'; trace(BODYP); ctx.lineWidth = .16; ctx.strokeStyle = PAPER; ctx.stroke(); ctx.fillStyle = PAPER; ctx.fill(); ctx.restore(); }
+  if (o.shadow) { ctx.save(); ctx.translate(.05, .06); trace(BODYP); ctx.fillStyle = pat(ink === 'o' ? P.c : P.o); ctx.fill(); ctx.restore(); }
+  if (o.arms) { ctx.strokeStyle = col; ctx.lineWidth = .1; ctx.beginPath(); o.arms.forEach(([ax, ay, bx, by]) => { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }); ctx.stroke(); }
+  trace(BODYP); ctx.fillStyle = col; ctx.fill(); if (o.shadow) { ctx.fillStyle = pat(ink === 'o' ? P.oL : P.cL); ctx.fill(); }
+  if (o.cap) { const c = o.cap; ctx.save(); ctx.translate(0, -.4 - (1 - c) * .5); ctx.rotate(-.12); ctx.globalAlpha = (o.a ?? 1) * clamp(c * 3);
+    ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.ellipse(0, 0, .3, .17, 0, Math.PI, 0); ctx.fill(); ctx.beginPath(); ctx.roundRect(-.06, -.03, .52, .08, .04); ctx.fill();
+    ctx.fillStyle = pat(P.c); ctx.beginPath(); ctx.ellipse(0, 0, .3, .17, 0, Math.PI, 0); ctx.fill(); ctx.restore(); }
+  // the eye
+  const ey = -.04, er = .25, bl = clamp(o.blink || 0);
+  if (o.wink) { ctx.strokeStyle = DARK; ctx.lineWidth = .06; ctx.beginPath(); ctx.arc(0, ey + .07, .15, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); }
+  else {
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = PAPER; ctx.beginPath(); ctx.ellipse(0, ey, er, er * (1 - bl * .92), 0, 0, 7); ctx.fill();
+    ctx.globalCompositeOperation = 'multiply'; ctx.strokeStyle = ring; ctx.lineWidth = .07; ctx.beginPath(); ctx.ellipse(0, ey, er, er * (1 - bl * .92), 0, 0, 7); ctx.stroke();
+    if (bl < .7) { const lx = clamp(o.lx || 0, -1, 1) * .1, ly = clamp(o.ly || 0, -1, 1) * .09, pr = (o.squint ? .07 : .105);
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = DARK; ctx.beginPath(); ctx.ellipse(lx, ey + ly, pr, pr * (o.squint ? .5 : 1), 0, 0, 7); ctx.fill();
+      ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(lx - .035, ey + ly - .035, .03, 0, 7); ctx.fill(); }
+    if (o.squint) { ctx.fillStyle = col; ctx.globalCompositeOperation = 'multiply'; ctx.fillRect(-.3, ey - .3, .6, .18); }
+  }
+  ctx.globalCompositeOperation = 'multiply';
+  if (o.prop) o.prop(ink);
+  ctx.restore();
+}
+const roller = sw => ink => { ctx.save(); ctx.translate(.38, .05); ctx.rotate(-.9 + sw); ctx.strokeStyle = DARK; ctx.lineWidth = .06; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -.62); ctx.stroke(); ctx.fillStyle = inkCol(ink); ctx.beginPath(); ctx.roundRect(-.24, -.8, .48, .2, .08); ctx.fill();
+  ctx.lineWidth = .04; ctx.stroke(); ctx.restore(); };
+const book = f => ink => { ctx.save(); ctx.translate(0, .24); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = PAPER; ctx.strokeStyle = DARK; ctx.lineWidth = .04;
+  const fl = Math.sin(f) * .12; ctx.beginPath(); ctx.moveTo(0, -.02); ctx.lineTo(-.36, -.12 - fl); ctx.lineTo(-.36, .14 - fl); ctx.lineTo(0, .2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -.02); ctx.lineTo(.36, -.12 + fl); ctx.lineTo(.36, .14 + fl); ctx.lineTo(0, .2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = inkCol(other(ink)); ctx.fillRect(-.3, -.04 - fl, .22, .03); ctx.fillRect(.08, -.04 + fl, .22, .03); ctx.restore(); };
+
+/* ---------- the hundred: index 0 is Tac ---------- */
+const NB = 100, SLOTS = [];
+for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) SLOTS.push([c, r]);
+const sd = ([c, r]) => (c - 4.5) ** 2 + (r - 4.5) ** 2 * 1.1 + rnd(c * 10 + r) * .6;
+SLOTS.sort((a, b) => sd(a) - sd(b));
+const SL = i => SLOTS[i];
+const INK = i => i === 0 ? 'c' : ((SL(i)[0] + SL(i)[1]) % 2 ? 'o' : 'c');
+const RES = [], CALC = SLOTS.findIndex(([c, r]) => c === 9 && r === 9);
+SLOTS.forEach(([c, r], i) => { if (i && r >= 7 && c <= 3) RES.push(i); });
+const isRes = i => RES.includes(i);
+const BSTEP = i => i === 0 ? -1 : Math.ceil(Math.log2(i + 1)) - 1, PARENT = i => i - 2 ** BSTEP(i);
+const SPLIT0 = 1.15, SPLITDT = .14;
+const gridA = i => { const [c, r] = SL(i); return [136 + c * 90, 610 + r * 68, 56]; };
+const gridB = i => { const [c, r] = SL(i); return [112 + c * 88 + (r % 2) * 44, 940 + r * 45, 48]; };
+// HOME room on the site map, and where everyone ends up in the chaos
+const ROOM = { x0: 110, y0: 330, x1: 700, y1: 900 };
+const CHAOS = [];
+{ const painters = [...Array(NB).keys()].filter(i => !isRes(i) && i !== CALC); const teamO = painters.filter(i => INK(i) === 'o'), teamC = painters.filter(i => INK(i) === 'c');
+  const key = i => SL(i)[1] * 10 + SL(i)[0]; teamO.sort((a, b) => key(a) - key(b)); teamC.sort((a, b) => key(a) - key(b));
+  [teamO, teamC].forEach((tm, side) => tm.forEach((i, j) => { const c = j % 5, r = Math.floor(j / 5);
+    CHAOS[i] = [150 + (c + side * 5) * 56 + (rnd(i * 3.3) - .5) * 14, 420 + r * 54 + (rnd(i * 5.1) - .5) * 10, 46]; }));
+  RES.forEach((i, j) => { const c = j % 4, r = Math.floor(j / 4); CHAOS[i] = [140 + c * 82 + (r % 2) * 30, 1112 + r * 84, 50]; });
+  CHAOS[CALC] = [868, 1236, 70]; }
+const DLY = [...Array(NB).keys()].map(i => rnd(i * 2.7) * .45 + (9 - SL(i)[1]) * .015);
+// org chart: four teams, a checker, and Tac on top
+const MAN = [540, 338], TEAMX = [150, 350, 550, 750], CHECK = [930, 1104, 76];
+const TEAMP = [], TEAMOF = [];
+{ const rest = [...Array(NB).keys()].filter(i => i && i !== CALC).sort((a, b) => CHAOS[a][0] - CHAOS[b][0]);
+  const sizes = [25, 25, 24, 24]; let k = 0;
+  sizes.forEach((n, j) => { const grp = rest.slice(k, k + n).sort((a, b) => CHAOS[a][1] - CHAOS[b][1]); k += n;
+    grp.forEach((i, m) => { const c = m % 5, r = Math.floor(m / 5); TEAMP[i] = [TEAMX[j] + (c - 2) * 38, 800 + r * 40, 34]; TEAMOF[i] = j; }); }); }
+TEAMP[CALC] = CHECK; TEAMOF[CALC] = -1;
+const DL2 = [...Array(NB).keys()].map(i => rnd(i * 4.9) * .5);
+// the clipboard at the end: 70 bots on the outline, 29 drawing three check marks
+const CLIP = [];
+{ const others = [...Array(NB).keys()].filter(i => i); const per = [], x0 = 250, y0 = 470, w = 580, h = 780, L = 2 * (w + h);
+  for (let k = 0; k < 70; k++) { let d = (k + .5) / 70 * L; let p; if (d < w) p = [x0 + d, y0]; else if ((d -= w) < h) p = [x0 + w, y0 + d]; else if ((d -= h) < w) p = [x0 + w - d, y0 + h]; else { d -= w; p = [x0, y0 + h - d]; } per.push(p); }
+  const chk = []; [760, 930, 1100].forEach((cy, row) => { const n = row < 2 ? 10 : 9; const A = [-50, -4], B = [-14, 34], C = [56, -50];
+    for (let k = 0; k < n; k++) { const u = k / (n - 1), f = u < .35 ? u / .35 : (u - .35) / .65; const p = u < .35 ? [lerp(A[0], B[0], f), lerp(A[1], B[1], f)] : [lerp(B[0], C[0], f), lerp(B[1], C[1], f)]; chk.push([360 + p[0], cy + p[1]]); } });
+  const order = others.slice().sort((a, b) => (TEAMP[a][1] - TEAMP[b][1]) || (TEAMP[a][0] - TEAMP[b][0]));
+  order.forEach((i, k) => { CLIP[i] = k < 70 ? [...per[k], 34] : [...chk[k - 70], 28]; }); }
+
+/* ---------- cut points ---------- */
+const C1 = S(12) - .15, C2 = S(14) - .15, C3 = S(16) - .15, C4 = S(19) - .1, C5 = S(23) - .05;
+const TK0 = S(3) + .05, ST0 = S(4) + .12, TKX = S(4) + .72, LOT0 = S(4) + .8;
+const PAINT = [[M(8, .2), 'o', 1, .42], [M(9, .2), 'c', -1, .42], [S(10) + .02, 'o', 1, .34], [S(10) + .48, 'c', -1, .32], [S(10) + .9, 'o', 1, .3], [S(11) - .05, 'c', -1, .28], [S(11) + .3, 'o', 1, .26], [S(11) + .62, 'c', -1, .26]];
+const SPL = Array.from({ length: 28 }, (_, k) => { const a = M(8, .45), b = C1 - .1, t = a + (b - a) * Math.pow(k / 27, .75);
+  return { t, x: 140 + rnd(k * 7.7) * 800, y: 360 + rnd(k * 3.1) * 640, ink: k % 2 ? 'c' : 'o', s: .45 + rnd(k * 1.9) * .55, rot: rnd(k) * 6 }; });
+const ITEMS = []; for (let k = 0; ; k++) { const tb = S(27) + .3 + k * .52; if (tb > S(30) - .2) break; const j = [0, 2, 1, 3][k % 4]; const ta = tb + .28 + (880 - TEAMX[j]) / 420; ITEMS.push({ k, j, tb, ta, bad: k === 1 }); }
+
+/* ---------- SFX cues + music sections (read by the mixer; page time) ---------- */
+const CUES = []; const cue = (t, s, g = 1, r = 1, off = 0, len = 0) => CUES.push([+t.toFixed(3), s, g, r, off, len]);
+cue(0.05, 'pop', .7, .8);
+for (let k = 0; k < 7; k++) cue(SPLIT0 + k * SPLITDT, 'pop', .55 + k * .04, 1 + k * .1);
+for (let k = 0; k < 4; k++) cue(S(2) + k * (S(3) - S(2)) / 4, 'tick', .5, k % 2 ? .8 : 1.2);
+cue(TK0, 'whoosh', .5); cue(ST0 + .05, 'stamp', 1); cue(TKX, 'whoosh', .4, 1.3); cue(LOT0 + .32, 'thunk', .9);
+cue(S(5) + .15, 'swish', .45);
+cue(S(6) + .05, 'stampede', .9, 1, 0, 3.2);
+cue(M(8, .1), 'paint', .55, 1, 0, C1 - M(8, .1) + .2); PAINT.forEach(([t]) => cue(t, 'roll', .35, .9 + rnd(t) * .3));
+SPL.forEach((s, k) => { if (k % 3 === 0) cue(s.t, 'splat', .35, .8 + rnd(k) * .5); });
+cue(C1 - .25, 'wipe', .6); cue(C1 + .2, 'pages', .7, 1, 0, 0); cue(C1 + 1.4, 'pages', .55, 1.1);
+[.6, 1.1, 1.7, 2.3].forEach((d, k) => cue(C1 + d, 'blip', .4, 1 + k * .15));
+cue(C2 - .25, 'wipe', .6); cue(M(15, .32), 'key', .6); cue(M(15, .34), 'ding', .7); cue(M(15, .4), 'sparkle', .5); cue(S(15) + 1.15, 'stamp', .8);
+cue(C3 - .25, 'wipe', .6); cue(C3 + .25, 'printer', .7, 1, 0, 2); cue(S(16) + .5, 'register', .8); for (let k = 0; k < 8; k++) cue(C3 + .55 + k * .34, 'coin', .3, 1 + (k % 3) * .12);
+cue(C4, 'whoosh', .45); [0, .25, .4, .55].forEach((d, k) => cue(S(19) + .15 + d, 'pop', .45, k ? 1.3 : .9));
+cue(S(21) - .1, 'riser', .55); cue(S(21) + 1.95, 'thunk', .7, 1.2);
+cue(C5 - .25, 'wipe', .5); cue(S(23), 'whistle', .9); cue(S(23) + .15, 'freeze', .5); cue(S(24) + .02, 'pop', .7, .9); cue(S(24) + .1, 'sparkle', .4);
+cue(S(25) + .05, 'chime', .55); cue(S(25) + .1, 'whoosh', .5, .8);
+for (let k = 0; k < 4; k++) cue(S(25) + 1.0 + k * .14, 'swish', .4, 1 + k * .1);
+for (let k = 0; k < 4; k++) cue(S(25) + 1.5 + k * .14, 'pop', .4, 1.2);
+cue(S(27) - .1, 'conveyor', .35, 1, 0, S(30) - S(27) + .4);
+ITEMS.forEach(it => { const quiet = it.ta > S(28); cue(it.ta, it.bad ? 'boing' : 'stamp', quiet ? .25 : .55, it.bad ? 1 : 1.15); });
+cue(S(30) + .1, 'swish', .45); for (let k = 0; k < 4; k++) cue(S(30) + .45 + k * .15, 'click', .5);
+cue(S(31) + .22, 'stamp', 1); cue(S(31) + .25, 'pop', .6); cue(S(31) + .3, 'sparkle', .6);
+cue(S(32) + .05, 'whoosh', .55, .7); [0, 1, 2].forEach(k => cue(S(32) + 1.0 + k * .2, 'pop', .45, 1 + k * .15));
+cue(S(34) + .15, 'wink', .7); cue(PAGE_END - 1.0, 'ding', .45, .75);
+const MUSIC = [[0, 'intro'], [S(6), 'chaos'], [C1, 'quirk'], [C3, 'bill'], [S(23), 'stop'], [S(23) + .75, 'build'], [S(28), 'quiet'], [S(30), 'resolve'], [PAGE_END, 'end']];
+const LOOK = 'riso2'; // music + sound palette in tools/sound.py
+Object.assign(window, { CUES, MUSIC, DUR, WARP, CAPS, LOOK });
+
+/* ---------- scene A: one robot becomes a hundred, one job, one homepage, paint war ---------- */
+function posSplit(i, t) {
+  const A = gridA(i);
+  if (i === 0) { const u = eio((t - 1.08) / .42); return [lerp(540, A[0], u), lerp(930, A[1], u), lerp(300, A[2], u)]; }
+  if (t > 2.5) return A;
+  const tb = SPLIT0 + BSTEP(i) * SPLITDT, u = eo((t - tb) / .3), pp = posSplit(PARENT(i), t);
+  return [lerp(pp[0], A[0], u), lerp(pp[1], A[1], u), A[2] * back((t - tb) / .3)];
+}
+function stateA(i, t) {
+  if (i && t < SPLIT0 + BSTEP(i) * SPLITDT) return null;
+  let [x, y, s] = posSplit(i, t), run = 0, step = 0;
+  if (t > S(3)) { const u = eio((t - S(3) - SL(i)[1] * .03) / .6), B = gridB(i); x = lerp(x, B[0], u); y = lerp(y, B[1], u); s = lerp(s, B[2], u); }
+  const r0 = S(6) + .05 + DLY[i];
+  if (t > r0) { const u = clamp((t - r0) / .85), e = eio(u), C = CHAOS[i], hop = (isRes(i) || i === CALC) ? 0 : Math.abs(Math.sin(u * Math.PI * 4)) * 22 * (1 - u * .6);
+    x = lerp(x, C[0], e); y = lerp(y, C[1], e) - hop; s = lerp(s, C[2], e); run = u < 1 ? 1 : 0; step = u * 26; }
+  return { x, y, s, run, step };
+}
+function siteMap(t, a, frozen) { // the website "lot": four rooms (pages), dashed until something is built
+  if (a <= 0) return; const drop = back((t - LOT0) / .55), dy = (1 - drop) * -700;
+  ctx.save(); ctx.translate(0, dy); ctx.globalAlpha = a;
+  const rooms = [['HOME', ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0], ['ABOUT', 730, 330, 240, 180], ['SHOP', 730, 525, 240, 180], ['CONTACT', 730, 720, 240, 180]];
+  // floor paint in HOME: each pass rolls across and covers the last
+  ctx.save(); ctx.beginPath(); ctx.roundRect(ROOM.x0, ROOM.y0, ROOM.x1 - ROOM.x0, ROOM.y1 - ROOM.y0, 26); ctx.clip();
+  PAINT.forEach(([tp, ink, dir, d]) => { const u = eio((t - tp) / d); if (u <= 0) return; const w = (ROOM.x1 - ROOM.x0 + 40) * u, x = dir > 0 ? ROOM.x0 - 20 : ROOM.x1 + 20 - w;
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = PAPER; ctx.fillRect(x, ROOM.y0, w, ROOM.y1 - ROOM.y0);
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = pat(ink === 'o' ? P.o : P.c); ctx.fillRect(x, ROOM.y0, w, ROOM.y1 - ROOM.y0);
+    ctx.globalAlpha = a * .55; ctx.fillStyle = inkCol(ink); ctx.fillRect(x, ROOM.y0, w, ROOM.y1 - ROOM.y0); ctx.globalAlpha = a;
+    const ex = dir > 0 ? x + w : x; ctx.fillStyle = inkCol(ink); ctx.fillRect(ex - 6, ROOM.y0, 12, ROOM.y1 - ROOM.y0); });
+  ctx.restore();
+  rooms.forEach(([n, x, y, w, h], k) => {
+    card(x, y, w, h, 26, 'c', { fill: false, noShadow: true, stroke: CYAN, lw: 8, dash: [26, 16], dashOff: frozen ? 0 : -t * 30 });
+    label(n, x + 24, y + 50, k ? 30 : 38, DARK, 'left', 900, .85); });
+  ctx.restore();
+}
+function sceneA(t) {
+  // title — the hook
+  const tout = eio((t - S(2) + .1) / .45);
+  printText('100 AI', 540, 380 - tout * 260, 168, 1 - tout); printText('AGENTS?', 540, 540 - tout * 260, 168, 1 - tout);
+  // day / night spinning past: they never sleep
+  const dnU = clamp((t - S(2)) / (S(3) - S(2))), night = (S(2) < t && t < S(3) + .3) ? Math.max(0, Math.sin(dnU * Math.PI * 2 - Math.PI / 2) * .5 + .5) * (1 - clamp((t - S(3)) / .3)) : 0;
+  if (night > 0) { ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = night * .55; ctx.fillStyle = '#5b6f9e'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  if (t > S(2) - .1 && t < S(3) + .4) { const a = clamp((t - S(2) + .1) / .2) * (1 - clamp((t - S(3)) / .4));
+    for (let k = 0; k < 4; k++) { const u = clamp(dnU * 4 - k), ang = Math.PI * (1 + u), x = 540 + Math.cos(ang) * 420, y = 560 + Math.sin(ang) * 300;
+      if (u <= 0 || u >= 1) continue; if (k % 2 === 0) print(SH.star, x, y, .62, .62, t * 3, 'o', a); else print(SH.blob, x, y, .5, .5, 0, 'c', a); }
+    if (night > .2) for (let k = 0; k < 14; k++) sparkle(100 + rnd(k * 3) * 880, 260 + rnd(k * 5) * 260, 14, clamp(night * 1.2 - rnd(k) * .3), 'c'); }
+  // the job ticket, stamped
+  if (t > TK0 && t < TKX + .6) { const d = back((t - TK0) / .5), out = eio((t - TKX) / .5), y = lerp(-300, 520, d) - out * 900, rot = -.04 + (1 - d) * .2;
+    ctx.save(); ctx.translate(540, y); ctx.rotate(rot); card(-360, -150, 720, 300, 30, 'c', { paper: true });
+    card(-360, -150, 720, 300, 30, 'c', { fill: false, noShadow: true, stroke: CYAN, lw: 10 });
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = CYAN; for (let k = 0; k < 9; k++) { ctx.beginPath(); ctx.arc(-360 + 40 + k * 80, -150, 13, 0, 7); ctx.fill(); } ctx.restore();
+    label('ONE JOB', -300, -72, 36, CYAN, 'left', 900); printText('BUILD ME', -2, 8, 92); printText('A WEBSITE', 0, 104, 92);
+    stampMark('APPROVED', 215, -112, 34, -.12, (t - ST0) / .5); ctx.restore(); }
+  // the site map
+  if (t > LOT0) siteMap(t, 1 - eio((t - C1 + .1) / .2), false);
+  // the crowd
+  const look = t > S(5) - .1 && t < S(6) + .2 ? clamp((t - S(5) + .1) / .25) : 0, push = 1 + eio((t - S(5)) / 1.2) * .03 * (1 - eio((t - S(6)) / .4));
+  ctx.save(); ctx.translate(540, 1100); ctx.scale(push, push); ctx.translate(-540, -1100);
+  const st = []; for (let i = 0; i < NB; i++) { const s = stateA(i, t); if (s) st.push([i, s]); }
+  st.sort((a, b) => a[1].y - b[1].y);
+  st.forEach(([i, s]) => {
+    let lx = Math.sin(t * 1.3 + i * 1.7) * .5, ly = Math.cos(t * 1.1 + i * 2.3) * .4, rot = 0, sx = 1, sy = 1, prop = null, ant = Math.sin(t * 3 + i) * .03;
+    if (look) { lx = lerp(lx, (520 - s.x) / 420, look); ly = lerp(ly, -1, look); }
+    if (s.run) { rot = Math.sin(s.step) * .12; ant = -.12; }
+    const inRoom = t > S(6) + 1.0 && !isRes(i) && i !== CALC;
+    if (inRoom) { const j = Math.sin(t * 8 + i * 1.3); s.x += j * 2.5; lx = Math.sin(t * 4 + i) * .8; ly = .3;
+      if (t > PAINT[0][0] - .3) { const mine = PAINT.filter(p => p[1] === INK(i) && t > p[0]).length, sw = Math.sin(t * 11 + i) * .5;
+        prop = roller(sw); rot = Math.sin(t * 11 + i) * .1 * (INK(i) === 'o' ? 1 : -1); sy = 1 + Math.sin(t * 11 + i) * .05; ly = .6; lx = INK(i) === 'o' ? .6 : -.6; } }
+    if (isRes(i) && t > S(6) + .4) { prop = book(t * 9 + i); ly = .8; lx = 0; }
+    bot(s.x, s.y, s.s * (i === 0 && t < 1.08 ? 1 + Math.sin(t * 5) * .03 : 1), INK(i), { lx, ly, rot, sx, sy, prop, step: s.step, ant, tac: i === 0, shadow: s.s > 120, halo: inRoom, blink: i === 0 && Math.abs(t - .55) < .07 ? 1 : 0 });
+    if (i === CALC && t > S(6) + .4) { ctx.save(); ctx.globalCompositeOperation = 'multiply'; card(s.x - 30, s.y - 12, 60, 70, 8, 'c', { noShadow: true });
+      ctx.fillStyle = ORANGE; for (let k = 0; k < 6; k++) ctx.fillRect(s.x - 22 + (k % 3) * 16, s.y + 22 + Math.floor(k / 3) * 16, 11, 11); ctx.fillStyle = PAPER; ctx.globalCompositeOperation = 'source-over'; ctx.fillRect(s.x - 22, s.y - 4, 44, 18); ctx.restore(); }
+  });
+  ctx.restore();
+  // paint splats everywhere
+  SPL.forEach(sp => { const u = (t - sp.t) / .18; if (u <= 0) return; const sc = sp.s * lerp(.2, 1, eo(u)) * (1 + Math.max(0, 1 - u) * .2);
+    print(SH.splat, sp.x, sp.y, sc, sc * .85, sp.rot, sp.ink, .92); });
+  if (t > S(6) - .2 && t < S(6) + 1.6) dust(t);
+}
+function dust(t) { ctx.save(); ctx.globalCompositeOperation = 'multiply';
+  for (let k = 0; k < 26; k++) { const u = clamp((t - S(6) - rnd(k) * .8) / .7); if (u <= 0 || u >= 1) continue; const x = 140 + rnd(k * 4.1) * 800, y = 960 + rnd(k * 2.3) * 360 - u * 60;
+    ctx.globalAlpha = (1 - u) * .6; ctx.fillStyle = pat(P.cL); ctx.beginPath(); ctx.arc(x, y, 20 + u * 40, 0, 7); ctx.fill(); } ctx.restore(); }
+
+/* ---------- scene B: twelve robots in a pile of books ---------- */
+function sceneB(t) {
+  const u = t - C1;
+  // the big open book
+  ctx.save(); ctx.translate(540, 500);
+  card(-360, -170, 720, 330, 24, 'c', { paper: true }); card(-360, -170, 720, 330, 24, 'c', { fill: false, noShadow: true, stroke: CYAN, lw: 10 });
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = CYAN; ctx.fillRect(-5, -170, 10, 330); ctx.restore();
+  const fp = (u * 2.2) % 1; { const w = Math.cos(fp * Math.PI) * 350; ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = PAPER; ctx.strokeStyle = CYAN; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(0, -170); ctx.lineTo(w, -170 - Math.sin(fp * Math.PI) * 40); ctx.lineTo(w, 160 - Math.sin(fp * Math.PI) * 40); ctx.lineTo(0, 160); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = pat(P.cL); ctx.globalAlpha = .5; ctx.fill(); ctx.restore(); }
+  printText('WHAT IS', -180, -10, 70); printText('A', -180, 80, 70); printText('WEBSITE?', 180, 30, 66);
+  ctx.restore();
+  // the "12" flag on top of the pile
+  const bu = back((u - .25) / .4); ctx.save(); ctx.translate(540, 790); ctx.scale(bu, bu); ctx.rotate(-.18); print(SH.burst, 0, 0, 1.05, 1.05, 0, 'o'); ctx.restore();
+  printText('12', 540, 822, 84, clamp((u - .3) / .2));
+  // the pile
+  const books = [[540, 1300, 560, 70, 'c'], [520, 1232, 500, 64, 'o'], [560, 1170, 520, 60, 'c'], [500, 1108, 460, 62, 'o'], [550, 1046, 480, 60, 'c'], [530, 986, 420, 58, 'o'], [545, 928, 380, 56, 'c'], [525, 872, 330, 54, 'o']];
+  books.forEach(([x, y, w, h, ink], k) => { const dy = (1 - eo((u - k * .04) / .35)) * 500; ctx.save(); ctx.translate(x, y + dy); ctx.rotate((rnd(k) - .5) * .08); card(-w / 2, -h / 2, w, h, 10, ink, { light: k % 2 === 1 }); ctx.restore(); });
+  RES.forEach((i, j) => { const side = j % 2 ? 1 : -1, row = Math.floor(j / 2), y = 1290 - row * 70 - 30, x = 540 + side * (250 - row * 22 + (j % 4 > 1 ? 40 : 0)) + (rnd(j) - .5) * 30;
+    const pop = back((u - .2 - j * .05) / .35);
+    bot(x, y - (1 - pop) * 60, 96 * clamp(pop, 0, 1.2), INK(i), { lx: -side * .3, ly: .9, prop: book(t * 10 + j), rot: side * .08 + Math.sin(t * 3 + j) * .04 });
+    if ([1, 4, 7, 10].includes(j)) { const k = [1, 4, 7, 10].indexOf(j), q = clamp((u - .6 - k * .55) / .5); if (q > 0 && q < 1) printText('?', x + side * 40, y - 70 - q * 40, 72, 1 - Math.max(0, q - .7) / .3); } });
+}
+
+/* ---------- scene C: the calculator nobody asked for ---------- */
+function sceneC(t) {
+  const u = t - C2, i = CALC, ink = INK(i), press = M(15, .32), lift = back(u / .5), bob = Math.sin(t * 5) * 8;
+  const cx = 540, cy = 600 + (1 - lift) * 300 + bob;
+  // the proud builder below
+  bot(540, 1130 + bob * .3, 250, ink, { lx: 0, ly: -1, shadow: true, arms: [[-.45, -.1, -.7, -1.35], [.45, -.1, .7, -1.35]], squint: t > press && t < press + .5 });
+  // the giant calculator, held up like a trophy
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.sin(t * 2.5) * .03);
+  card(-230, -290, 460, 580, 40, 'c'); card(-190, -250, 380, 120, 18, 'c', { paper: true, noShadow: true });
+  const shown = t < M(14, .7) ? '1+1' : t < press ? '1+1=' : '2'; ctx.save(); ctx.font = `800 84px ${SANS}`; ctx.textAlign = 'right'; ctx.fillStyle = DARK; ctx.fillText(shown, 165, -158); ctx.restore();
+  for (let k = 0; k < 16; k++) { const c = k % 4, r = Math.floor(k / 4), x = -180 + c * 92, y = -95 + r * 92, isEq = k === 15, dn = isEq && t > press && t < press + .25 ? 8 : 0;
+    const op = r === 0 || c === 3; if (isEq) card(x, y + dn, 76, 76, 16, 'o', { noShadow: true }); else { card(x, y + dn, 76, 76, 16, 'c', { paper: true, noShadow: true }); card(x, y + dn, 76, 76, 16, 'c', { fill: false, noShadow: true, stroke: op ? ORANGE : CYAN, lw: 6 }); } label(['7','8','9','÷','4','5','6','×','1','2','3','−','0','.','+','='][k], x + 38, y + 54 + dn, 40, DARK, 'center', 900, .9); }
+  ctx.restore();
+  for (let k = 0; k < 7; k++) sparkle(cx + Math.cos(k * .9) * (260 + rnd(k) * 60), cy + Math.sin(k * .9) * 260, 34, (t - press - k * .06) / .6, k % 2 ? 'o' : 'c');
+  stampMark('NOT IN THE BRIEF', 700, 1330, 38, -.12, (t - S(15) - 1.1) / .5);
+}
+
+/* ---------- scene D: the bill, then the one real number ---------- */
+function sceneD(t) {
+  const u = t - C3;
+  if (t < C4 + .45) { // thinking costs money: thoughts become coins, coins become receipt
+    const out = eio((t - C4) / .35), ox = out * 900;
+    ctx.save(); ctx.translate(ox, -out * 300);
+    const len = eo(u / 2.8) * 880;
+    ctx.save(); ctx.beginPath(); ctx.rect(560, 330, 400, len + 30); ctx.clip();
+    card(600, 330 + len - 900, 320, 900, 6, 'c', { paper: true }); ctx.globalCompositeOperation = 'multiply';
+    for (let k = 0; k < 12; k++) { const y = 330 + len - 840 + k * 70; label('THINK', 628, y + 22, 30, DARK, 'left', 800); ctx.fillStyle = DARK; for (let d = 0; d < 9; d++) ctx.fillRect(740 + d * 13, y + 16, 5, 5);
+      ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.arc(882, y + 10, 16, 0, 7); ctx.fill(); }
+    ctx.restore();
+    card(560, 250, 400, 110, 24, 'c'); label('BILL', 760, 322, 46, PAPER, 'center', 900);
+    ctx.restore();
+    for (let k = 0; k < 6; k++) { const c = k % 2, r = Math.floor(k / 2), x = 170 + c * 200 - out * 600, y = 560 + r * 250, ink = k % 3 === 1 ? 'o' : 'c', ph = (u * 1.4 + k * .37) % 1;
+      bot(x, y + Math.sin(t * 4 + k) * 6, 120, ink, { lx: .3, ly: -.7, blink: 0 });
+      const bub = clamp(ph / .35) * (1 - clamp((ph - .55) / .1)); if (bub > 0) { ctx.save(); ctx.fillStyle = PAPER; ctx.strokeStyle = CYAN; ctx.lineWidth = 6;
+        [[38, -86, 16], [62, -122, 22], [96, -170, 40]].forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(x + dx, y + dy, r * bub, 0, 7); ctx.fill(); ctx.stroke(); });
+        ctx.fillStyle = DARK; for (let d = 0; d < 3; d++) { ctx.beginPath(); ctx.arc(x + 80 + d * 16, y - 170, 4 * bub, 0, 7); ctx.fill(); } ctx.restore(); }
+      const cu = clamp((ph - .55) / .4); if (cu > 0 && cu < 1 && u > .4) { const sx = x + 96, sy = y - 170, tx = 760 + ox, ty = 300, px = lerp(sx, tx, cu), py = lerp(sy, ty, cu) - Math.sin(cu * Math.PI) * 160;
+        ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.ellipse(px, py, 22 * Math.abs(Math.cos(cu * 9)) + 4, 22, 0, 0, 7); ctx.fill(); ctx.restore(); } }
+  }
+  if (t > C4) { // Anthropic's own research system, then the bars
+    const a = eo((t - C4 - .3) / .4), sh = eio((t - S(21) + .35) / .6);
+    const dx = lerp(540, 750, sh), dy = lerp(560, 318, sh), sc = lerp(1, .52, sh);
+    label('ANTHROPIC’S MULTI-AGENT', 540, 285 - sh * 300, 40, DARK, 'center', 900, a * (1 - sh)); label('RESEARCH SYSTEM', 540, 335 - sh * 300, 40, DARK, 'center', 900, a * (1 - sh));
+    ctx.save(); ctx.translate(dx, dy); ctx.scale(sc, sc); ctx.globalAlpha = a;
+    const subs = [[-250, 230], [0, 260], [250, 230]];
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.strokeStyle = CYAN; ctx.lineWidth = 10; ctx.setLineDash([22, 14]); ctx.lineDashOffset = -t * 40;
+    subs.forEach(([x, y], k) => { const p = eo((t - S(19) - .3 - k * .12) / .4); ctx.beginPath(); ctx.moveTo(0, 60); ctx.lineTo(x * p, 60 + (y - 60) * p); ctx.stroke(); }); ctx.restore();
+    bot(0, 0, 150 * back((t - S(19) - .25) / .4), 'c', { lx: Math.sin(t * 2) * .6, ly: .5, shadow: true, cap: 1 });
+    subs.forEach(([x, y], k) => bot(x, y, 100 * back((t - S(19) - .35 - k * .15) / .4), k === 1 ? 'o' : 'c', { lx: -x / 300, ly: -.6, ant: Math.sin(t * 6 + k) * .1 }));
+    label('lead agent', 130, -40, 34, DARK, 'left', 700, 1 - sh); label('helpers working in parallel', 0, 380, 34, DARK, 'center', 700, 1 - sh);
+    ctx.restore();
+    // bars from zero: a normal chat vs that system
+    const ba = clamp((t - S(21) + .2) / .3), base = 1150, unit = 38;
+    if (ba > 0) {
+      ctx.save(); ctx.globalAlpha = ba; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = DARK; ctx.fillRect(140, base, 800, 6); ctx.restore();
+      const h1 = unit * eo((t - S(21)) / .5), h2 = unit * 15 * eo((t - S(21) - .25) / 1.7);
+      [[330, h1], [750, h2]].forEach(([x, h]) => { if (h > 1) { card(x - 115, base - h, 230, h, 14, 'c'); } });
+      // one robot over the chat bar, the same size as the group icon over the other
+      bot(330, base - unit - 190, 110 * ba, 'c', { lx: .2, ly: .3 }); { ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = ba; ctx.fillStyle = pat(P.o); ctx.beginPath(); ctx.roundRect(388, base - unit - 310, 110, 66, 22); ctx.fill(); ctx.restore(); }
+      label('1×', 330, base - unit - 24, 56, DARK, 'center', 900, clamp((t - S(21) - .5) / .2));
+      label('~15×', 750, base - unit * 15 - 24, 64, DARK, 'center', 900, clamp((t - S(21) - 1.9) / .2));
+      label('normal chat', 330, base + 54, 36, DARK, 'center', 800, ba); label('multi-agent system', 750, base + 54, 36, DARK, 'center', 800, ba);
+      label('tokens used · Anthropic, 2025 · vendor-reported, for that system', 540, base + 112, 26, DARK, 'center', 600, ba * .8);
+    }
+  }
+}
+
+/* ---------- scene E: one manager, four teams, a checker; then quiet; then a website and the plan ---------- */
+const BLUE = [540, 612], BW = 600, BH = 296, TILES = [['HEADER', 'o'], ['MENU', 'c'], ['CONTENT', 'oc'], ['FOOTER', 'o']];
+const tileRect = k => [[0, 0, 1, .2], [0, .2, .26, .8], [.26, .2, .74, .62], [.26, .82, .74, .18]][k];
+function sceneE(t) {
+  const mapA = 1 - eio((t - S(25)) / .45);
+  if (mapA > 0) siteMap(t, mapA, true);
+  SPL.forEach(sp => print(SH.splat, sp.x, sp.y + (1 - mapA) * 40, sp.s, sp.s * .85, sp.rot, sp.ink, .92 * mapA));
+  // freeze flash + whistle
+  const fr = clamp((t - S(23)) / .12) * (1 - clamp((t - S(23) - .25) / .35)); if (fr > 0) { ctx.save(); ctx.globalAlpha = fr * .6; ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  if (t > S(23) - .05 && t < S(24) + .5) { const a = back((t - S(23)) / .3) * (1 - clamp((t - S(24) - .2) / .3)); ctx.save(); ctx.translate(790, 300); ctx.rotate(-.12 + Math.sin(t * 40) * .02); ctx.scale(a, a);
+    print(SH.burst, 0, 0, 2.3, 1.3, 0, 'o'); ctx.restore(); printText('TWEET!', 790, 322, 70, clamp(a, 0, 1)); }
+  // org lines
+  const lineP = eo((t - S(25) - .7) / .6), fadeE = 1 - eio((t - S(32)) / .5);
+  if (lineP > 0 && fadeE > 0) { ctx.save(); ctx.globalAlpha = fadeE; ctx.globalCompositeOperation = 'multiply'; ctx.strokeStyle = CYAN; ctx.lineWidth = 9; ctx.setLineDash([20, 14]); ctx.lineDashOffset = -t * 30;
+    TEAMX.forEach(x => { ctx.beginPath(); ctx.moveTo(MAN[0], MAN[1] + 70); ctx.lineTo(lerp(MAN[0], x, lineP), lerp(MAN[1] + 70, 650, lineP)); ctx.stroke(); }); ctx.restore(); }
+  // blueprint → tiles → teams
+  const bpA = back((t - S(25) - .25) / .45), split = t > S(25) + 1.0;
+  if (t > S(25) + .2 && !split) { ctx.save(); ctx.translate(BLUE[0], BLUE[1]); ctx.scale(bpA * .75, bpA * .75); wire(1, false); ctx.restore(); }
+  TILES.forEach(([n, ink], k) => { if (!split || t > S(30) + 1.4) return;
+    const fly = eio((t - S(25) - 1.0 - k * .14) / .55), [rx, ry, rw, rh] = tileRect(k), sx = BLUE[0] - BW * .375 + (rx + rw / 2) * BW * .75, sy = BLUE[1] - BH * .375 + (ry + rh / 2) * BH * .75;
+    let x = lerp(sx, TEAMX[k], fly), y = lerp(sy, 714, fly) - Math.sin(fly * Math.PI) * 80, w = lerp(rw * BW * .75, 150, fly), h = lerp(rh * BH * .75, 84, fly);
+    const up = eio((t - S(30) - .35 - k * .15) / .55); const [fx, fy, fw, fh] = tileRect(k);
+    if (up > 0) { x = lerp(x, BLUE[0] - BW / 2 + (fx + fw / 2) * BW, up); y = lerp(y, BLUE[1] - BH / 2 + (fy + fh / 2) * BH, up) - Math.sin(up * Math.PI) * 120; w = lerp(w, fw * BW - 10, up); h = lerp(h, fh * BH - 10, up); }
+    tile(x, y, w, h, n, ink, 1 - up * .0); });
+  // finished site + LIVE
+  if (t > S(30) + .3 && t < S(32) + .6) { const a = clamp((t - S(30) - .3) / .3) * fadeE; ctx.save(); ctx.globalAlpha = a; ctx.translate(BLUE[0], BLUE[1]); wire(1, true, t > S(30) + 1.4); ctx.restore();
+    if (t > S(30) + 1.4) TILES.forEach(([n, ink], k) => { const [fx, fy, fw, fh] = tileRect(k); ctx.save(); ctx.globalAlpha = fadeE; tile(BLUE[0] - BW / 2 + (fx + fw / 2) * BW, BLUE[1] - BH / 2 + (fy + fh / 2) * BH, fw * BW - 10, fh * BH - 10, n, ink, 1); ctx.restore(); });
+    ctx.save(); ctx.globalAlpha = fadeE; stampMark('LIVE', 760, 500, 64, -.18, (t - S(31) - .2) / .5); ctx.restore(); }
+  // the afternoon sun
+  if (t > S(30) - .2) { const a = clamp((t - S(30) + .2) / .4) * fadeE; print(SH.star, 905, 320 - eo((t - S(30)) / 1.5) * 40, .7, .7, t * .6, 'o', a); }
+  // conveyor + checker
+  const cvA = eo((t - S(27) + .15) / .4) * fadeE;
+  if (cvA > 0) { ctx.save(); ctx.globalAlpha = cvA; ctx.translate(-(1 - cvA) * 300, 0); card(40, 1172, 860, 46, 23, 'c', { light: true });
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = CYAN; const sp = t < S(28) ? t * 420 : S(28) * 420 + (t - S(28)) * 260;
+    for (let x = 60 + (sp % 60); x < 890; x += 60) { ctx.beginPath(); ctx.arc(x, 1195, 11, 0, 7); ctx.fill(); } ctx.restore(); ctx.restore();
+    ITEMS.forEach(it => { if (t < it.tb) return; const cx = TEAMX[it.j]; let x, y, a = 1, sc = 1; const drop = clamp((t - it.tb) / .28);
+      if (t < it.ta) { x = cx + (t - it.tb - .28 > 0 ? (t - it.tb - .28) * 420 : 0); y = lerp(990, 1150, drop * drop); }
+      else if (it.bad) { const b = clamp((t - it.ta) / .7); x = lerp(880, cx, b); y = 1150 - Math.sin(b * Math.PI) * 260; a = 1 - clamp((b - .85) / .15); }
+      else { const b = clamp((t - it.ta - .25) / .45); x = lerp(880, 930, b); y = lerp(1150, 1030, b); sc = 1 - b * .6; a = 1 - b; }
+      if (a <= 0) return; ctx.save(); ctx.globalAlpha = a * cvA; tile(x, y, 96 * sc, 58 * sc, '', TILES[it.j][1], 1, true); ctx.restore();
+      if (t > it.ta && t < it.ta + .5) { if (it.bad) printText('✗', 880, 1080, 70, 1 - clamp((t - it.ta) / .5)); else printText('✓', 880, 1080, 70, 1 - clamp((t - it.ta - .25) / .25)); } }); }
+  // the robots
+  const zq = eio((t - S(28)) / 1.6) * (1 - eio((t - S(30)) / .6)) * .06; ctx.save(); ctx.translate(540, 900); ctx.scale(1 + zq, 1 + zq); ctx.translate(-540, -900);
+  const st = []; for (let i = 0; i < NB; i++) st.push([i, stateE(i, t)]);
+  st.sort((a, b) => (a[0] === 0) - (b[0] === 0) || a[1].y - b[1].y);
+  const calm = clamp((t - S(28)) / .4);
+  st.forEach(([i, s]) => { const quietBob = Math.sin(t * 3.2) * 3 * calm;
+    let lx = Math.sin(t * 1.3 + i * 1.7) * .5 * (1 - calm), ly = Math.cos(t * 1.1 + i * 2.3) * .4 * (1 - calm), prop = null;
+    if (s.frozen) { lx = .9 * Math.sign(Math.sin(i)); ly = -.4; }
+    if (s.team && t > S(26) - .2) { lx = (TEAMX[TEAMOF[i]] - s.x) / 200; ly = -.9; }
+    if (i === 0) { lx = Math.sin(t * .9) * .5; ly = .4; if (t > S(32) + .8) { lx = 0; ly = 0; } }
+    if (i === CALC && s.team) { prop = ink => { ctx.save(); ctx.rotate(Math.sin(t * 6) * .1); ctx.fillStyle = DARK; ctx.fillRect(.36, -.3, .08, .4); ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.roundRect(.24, .08, .32, .14, .04); ctx.fill(); ctx.restore(); }; lx = -.8; ly = .5; }
+    const wink = (i === 0 && t > S(34) + .15 && t < S(34) + .65) || (s.team && i !== CALC && t > S(28) + .35 + DL2[i] * .4 && t < S(30) - .2 + DL2[i] * .3);
+    bot(s.x, s.y + (s.team ? quietBob : 0), s.s, INK(i), { lx, ly, prop, tac: i === 0, cap: i === 0 ? clamp((t - S(24)) / .25) : 0, shadow: i === 0 && s.s > 90, wink, rot: s.rot || 0, ant: s.ant || 0, blink: i === 0 && Math.abs(t - S(33) - .3) < .08 ? 1 : 0 });
+    if (s.frozen && [3, 9, 17, 22, 31, 44, 58, 71].includes(i)) { const q = back((t - S(23) - .1 - (i % 5) * .05) / .25) * (1 - clamp((t - S(24) - .2) / .3)); if (q > 0) printText('!', s.x, s.y - s.s * .8, 54 * clamp(q, 0, 1.3), 1); }
+  });
+  ctx.restore();
+  // the plan
+  if (t > S(32) + .3) { const a = clamp((t - S(32) - .3) / .5); ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = pat(P.cL); ctx.beginPath(); ctx.roundRect(268, 488, 544, 744, 30); ctx.fill(); ctx.restore();
+    printText('THE PLAN', 540, 640 + (1 - eo((t - S(34) + .15) / .4)) * 20, 96, eo((t - S(34) + .15) / .4));
+    [760, 930, 1100].forEach((y, k) => { const p = eo((t - S(34) + .05 - k * .18) / .35); if (p > 0) { ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = pat(P.o); ctx.fillRect(450, y - 12, 330 * p, 24); ctx.fillStyle = ORANGE; ctx.fillRect(450, y - 6, 300 * p, 12); ctx.restore(); } });
+    label('tacdel', 540, 1340, 40, DARK, 'center', 900, clamp((t - S(33)) / .4)); }
+}
+function stateE(i, t) {
+  let [x, y, s] = CHAOS[i], frozen = t < S(25) + DL2[i], team = false;
+  if (i === 0) { const u = eio((t - S(23) - .35) / .8); x = lerp(x, MAN[0], u); y = lerp(y, MAN[1], u) - Math.sin(u * Math.PI) * 120; s = lerp(s, 128, u); frozen = u <= 0; }
+  else { const r0 = S(25) + DL2[i], u = eio((t - r0) / .8), T2 = TEAMP[i]; x = lerp(x, T2[0], u); y = lerp(y, T2[1], u) - Math.sin(clamp((t - r0) / .8) * Math.PI) * 70; s = lerp(s, T2[2], u); team = u >= 1; }
+  if (t > S(32)) { const r1 = S(32) + .05 + DL2[i] * .7, u = eio((t - r1) / .8), Cl = i === 0 ? [540, 425, 132] : CLIP[i];
+    x = lerp(x, Cl[0], u); y = lerp(y, Cl[1], u) - Math.sin(clamp((t - r1) / .8) * Math.PI) * 50; s = lerp(s, Cl[2], u); team = false; }
+  return { x, y, s, frozen, team };
+}
+function wire(sc, built, full) { // website blueprint / browser frame (centered on origin)
+  card(-BW / 2, -BH / 2, BW, BH, 22, 'c', { paper: true }); card(-BW / 2, -BH / 2, BW, BH, 22, 'c', { fill: false, noShadow: true, stroke: CYAN, lw: 9, dash: built ? null : [22, 12] });
+  if (!built) TILES.forEach(([n], k) => { const [rx, ry, rw, rh] = tileRect(k); card(-BW / 2 + rx * BW + 8, -BH / 2 + ry * BH + 8, rw * BW - 16, rh * BH - 16, 10, 'c', { fill: false, noShadow: true, stroke: CYAN, lw: 5, dash: [12, 10] });
+    label(n, -BW / 2 + (rx + rw / 2) * BW, -BH / 2 + (ry + rh / 2) * BH + 10, 26, CYAN, 'center', 900); });
+}
+function tile(x, y, w, h, n, ink, a = 1, mini = false) { if (w < 2 || h < 2) return; ctx.save(); ctx.globalAlpha *= a;
+  card(x - w / 2, y - h / 2, w, h, Math.min(14, h / 3), ink === 'oc' ? 'c' : ink, { light: ink === 'oc', noShadow: mini });
+  if (ink === 'oc') { ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = ORANGE; ctx.fillRect(x - w / 2 + w * .1, y - h / 2 + h * .2, w * .5, h * .12); ctx.fillRect(x - w / 2 + w * .1, y - h / 2 + h * .45, w * .7, h * .1); ctx.fillRect(x - w / 2 + w * .1, y - h / 2 + h * .65, w * .6, h * .1); ctx.restore(); }
+  if (n && w > 90) label(n, x, y + Math.min(h, 60) * .18, Math.min(26, h * .45), ink === 'oc' ? DARK : PAPER, 'center', 900); ctx.restore(); }
+
+/* ---------- ink wipe between scenes ---------- */
+function wipe(t, tc) { const u = (t - (tc - .25)) / .5; if (u <= 0 || u >= 1) return; const xL = lerp(-2700, 1580, u);
+  ctx.save(); ctx.beginPath(); ctx.moveTo(xL, 0); ctx.lineTo(xL + 2200, 0); ctx.lineTo(xL + 1700, H); ctx.lineTo(xL - 500, H); ctx.closePath(); ctx.fillStyle = CYAN; ctx.fill();
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = pat(P.o); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.moveTo(xL + 2200, 0); ctx.lineTo(xL + 2260, 0); ctx.lineTo(xL + 1760, H); ctx.lineTo(xL + 1700, H); ctx.closePath(); ctx.fillStyle = ORANGE; ctx.fill(); ctx.restore(); }
+
+/* ---------- captions (tacdel-shorts style) ---------- */
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+
+/* ---------- frame ---------- */
+function draw(traw) {
+  const t = warp(traw);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([]);
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  if (t < C1) sceneA(t); else if (t < C2) sceneB(t); else if (t < C3) sceneC(t); else if (t < C5) sceneD(t); else sceneE(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.setLineDash([]);
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .9; ctx.drawImage(GRAIN[Math.floor(t * 12) % 3], 0, 0, W, H); ctx.restore();
+  [C1, C2, C3, C5].forEach(tc => wipe(t, tc));
+  const f = clamp((t - (PAGE_END - .35)) / .35); if (f > 0) { ctx.globalAlpha = f; ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  captions(t);
+  if (PENDING) { ctx.save(); ctx.font = `700 26px ${SANS}`; ctx.fillStyle = 'rgba(8,8,8,.7)'; ctx.beginPath(); ctx.roundRect(24, 150, 640, 44, 22); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText('REVIEW COPY · voice pending · timing estimated', 44, 173); ctx.restore(); }
+}
+
+/* ---------- player (works with tools/sheet.cjs and tools/render.cjs) ---------- */
+let T = Q.has('t') ? clamp(+Q.get('t'), 0, DUR - .001) : 0, playing = !Q.has('t'), prev = null;
+function frame(now) { if (playing && prev !== null) T = (T + Math.min(.1, (now - prev) / 1000)) % DUR; prev = now; draw(T); requestAnimationFrame(frame); }
+addEventListener('keydown', e => { if (e.key === ' ') { playing = !playing; e.preventDefault(); } else if (e.key.toLowerCase() === 'r') { T = 0; playing = true; } });
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { T = s; playing = false; draw(T); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
