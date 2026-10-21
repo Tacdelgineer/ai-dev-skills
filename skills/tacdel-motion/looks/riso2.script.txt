@@ -1,0 +1,9 @@
+Imagine you hire a hundred AI agents. They never sleep, and they have one job: build me a website.
+Here's what happens.
+All one hundred start on the homepage at once. Half paint it orange, half paint it blue, and they keep painting over each other.
+Twelve are still researching what a website is. And one is building a calculator nobody asked for.
+Meanwhile, your bill climbs, because every agent costs money each time it thinks. When Anthropic tested its own multi-agent research system, it used about fifteen times more tokens than a normal chat.
+So you make one agent the manager. It splits the job into pieces, gives each team one piece, and puts a checker at the end.
+Suddenly <break time="0.6s" /> it's quiet.
+By the afternoon, you have a website.
+The hard part was never the agents. It was the plan.

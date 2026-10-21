@@ -1,0 +1,8 @@
+Two AIs get the same job: book dinner for six on Friday, under thirty dollars each.
+The first is a chatbot with no tools. In two seconds, it writes a beautiful list of five restaurants. Done!
+Except <break time="0.6s" /> it didn't book anything. It can't. And two of those places closed last year.
+The second is an agent, with tools and permission to use them. It's slower. It finds places open Friday, checks the prices, and tries to book the best one.
+The table's full.
+So it tries its second choice, which has a table at seven. It books it, adds it to your calendar, and texts your friends.
+The real difference is tools. Without them, an AI can only tell you what to do. With them, it can do it, check the result, and fix what goes wrong.
+That's also why agents cost more, and why you should still check their work.
