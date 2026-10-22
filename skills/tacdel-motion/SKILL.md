@@ -36,7 +36,7 @@ In Claude Code on a local machine:
 
 Alireza's settings are speed 1.0, stability 69%, similarity 78% and style 24%, on Eleven Multilingual v2. The Claude ElevenLabs connector can't pass sliders. ElevenLabs uses a voice's *stored* settings whenever a request passes none, so store them on the voice once with the API (`POST /v1/voices/{voice_id}/settings/edit`, body `{"stability":0.69,"similarity_boost":0.78,"style":0.24,"speed":1.0,"use_speaker_boost":true}`).
 
-To check they took effect, read them back with `GET /v1/voices/{voice_id}/settings` (read-only, no credits). Pace is only a rough check, and only on a full 130–150-word script with sentence breaks. At speed 1.0 expect roughly 150–170 wpm; that range is scaled from 140–160 measured at 0.93 and has not been measured at 1.0 yet. A one-sentence test has no pauses and runs around 200 wpm, which is expected, not a failure. If a full script runs far above the range, read the stored settings back before shipping and say what you found in the delivery. Never pretend the settings were applied, and never swap to another voice.
+To check they took effect, read them back with `GET /v1/voices/{voice_id}/settings` (read-only, no credits). Pace is only a rough check, and only on a full 130–150-word script with sentence breaks. At speed 1.0 expect about 150–170 wpm. That range is measured, not estimated: three full Shorts made at speed 1.0 on Oct 21, 2026 ran 154–168 wpm. A one-sentence test has no pauses and runs around 200 wpm, which is expected, not a failure. If a full script runs far above the range, read the stored settings back before shipping and say what you found in the delivery. Never pretend the settings were applied, and never swap to another voice.
 
 ## Steps
 

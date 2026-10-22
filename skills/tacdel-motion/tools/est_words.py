@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Estimated word timings for a script (fallback when no voice can be made yet): model fitted on Alireza's real takes,
-calibrated on today's connector sample, then slowed for speed 0.93. Output = words.json shape."""
+calibrated on today's connector sample, then scaled for the voice's speed (SPEED). Output = words.json shape."""
 import json, re, sys
-SPEED = 0.93
+SPEED = 1.0
 def raw(text):
     text = re.sub(r'<break time="([\d.]+)s" />', r' <BRK\1> ', text)
     out, t = [], 0.12

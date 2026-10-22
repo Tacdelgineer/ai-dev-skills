@@ -33,7 +33,7 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
    `<break time="0.5s" />` at most twice. Then write `chunks.txt`: one caption chunk per line in the
    spoken words, with ` || shown text` added where the screen should show digits.
 3. **Voice.** Voice "Alireza" (look up its id with `creative_list_voices`). Model: Multilingual v2.
-   Settings: speed 0.93, stability 69%, similarity 78%, style exaggeration 24%.
+   Settings: speed 1.0, stability 69%, similarity 78%, style exaggeration 24%.
    - The Claude ElevenLabs connector can set only the model and the voice, not those sliders. So
      Alireza makes the take on the ElevenLabs Text to Speech page with these settings and attaches the
      MP3.

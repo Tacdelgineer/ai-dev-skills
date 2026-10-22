@@ -6,9 +6,10 @@
 Each words.json is the ElevenLabs Scribe transcript of one take (creative_transcribe_audio ->
 words_download_url). Scores every take on: how closely the transcript matches the script (a skipped,
 doubled or garbled word costs points), the speaking pace, and the longest pause (a long dead gap usually
-means a glitch). Prints a table and the winner. Pace also checks the voice settings: at speed 0.93 the
-Alireza voice lands around 140-160 words per minute. A take far faster than that means the stored voice
-settings were not applied, so say that instead of shipping it.
+means a glitch). Prints a table and the winner. Pace is a rough check on the voice settings: on full scripts at
+speed 1.0 the Alireza voice measured 154-168 words per minute. A one-sentence test has no pauses and runs
+about 200 wpm, so the warning means nothing there. On a full script, a take far faster than that means the
+stored voice settings should be read back before shipping.
 """
 import difflib, json, re, sys
 
@@ -42,7 +43,7 @@ def main():
         for tag, a, b in bad[:6]: print(f"{'':>36}{tag}: script '{a}' -> heard '{b}'")
     best = rows[0]
     print(f"\nbest: {best[1]}")
-    if best[3] > 175: print('WARNING: pace is far above speed 0.93 — the stored voice settings were probably not applied.')
+    if best[3] > 175: print('WARNING: pace is above the stored speed — on a full script, read the stored voice settings back. One-sentence tests run fast; ignore it there.')
     if best[2] < .9: print('WARNING: even the best take drifts from the script; check the flagged words before using it.')
 
 if __name__ == '__main__':
