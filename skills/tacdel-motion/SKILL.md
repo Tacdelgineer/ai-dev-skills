@@ -34,9 +34,9 @@ In Claude Code on a local machine:
 
 ## One-time setup: the voice settings
 
-Alireza's settings are speed 0.93, stability 69%, similarity 78% and style 24%, on Eleven Multilingual v2. The Claude ElevenLabs connector can't pass sliders. ElevenLabs uses a voice's *stored* settings whenever a request passes none, so store them on the voice once with the API (`POST /v1/voices/{voice_id}/settings/edit`, body `{"stability":0.69,"similarity_boost":0.78,"style":0.24,"speed":0.93,"use_speaker_boost":true}`).
+Alireza's settings are speed 1.0, stability 69%, similarity 78% and style 24%, on Eleven Multilingual v2. The Claude ElevenLabs connector can't pass sliders. ElevenLabs uses a voice's *stored* settings whenever a request passes none, so store them on the voice once with the API (`POST /v1/voices/{voice_id}/settings/edit`, body `{"stability":0.69,"similarity_boost":0.78,"style":0.24,"speed":1.0,"use_speaker_boost":true}`).
 
-To check they took effect, look at the pace: `pick_take.py` should report about 140–160 wpm. Takes far faster than that (above 175 wpm) mean the stored settings are not being applied. Say so in the delivery. Never pretend the settings were applied, and never swap to another voice.
+To check they took effect, read them back with `GET /v1/voices/{voice_id}/settings` (read-only, no credits). Pace is only a rough check, and only on a full 130–150-word script with sentence breaks. At speed 1.0 expect roughly 150–170 wpm; that range is scaled from 140–160 measured at 0.93 and has not been measured at 1.0 yet. A one-sentence test has no pauses and runs around 200 wpm, which is expected, not a failure. If a full script runs far above the range, read the stored settings back before shipping and say what you found in the delivery. Never pretend the settings were applied, and never swap to another voice.
 
 ## Steps
 
@@ -49,7 +49,7 @@ To check they took effect, look at the pace: `pick_take.py` should report about 
    - curl every take's `content_url` to `take1..4.mp3`.
    - For each take, run `creative_add_flow_asset_node` (its generation_id), then `creative_transcribe_audio` (`eleven_scribe_v1`, connect_from that node). Poll once, then curl each `words_download_url` to `take1..4.words.json`.
    - Run `python3 tools/pick_take.py script.txt take*.words.json`. Keep the winner as `voice.mp3` + `words.json`. Pin it on the flow with `creative_add_flow_asset_node`, labelled "Chosen take (synced to video)", so Alireza can hear it.
-   - If the pace warning fires, say so; it's the voice-settings check.
+   - If `pick_take.py`'s pace warning fires on a full script, read the stored settings back and say what you found. Ignore it on a one-sentence test.
    - **With an API key instead of the connector** (Claude Code): `python3 tools/voice.py script.txt <episode dir>` replaces the bullets above. It makes 2 takes on the stored settings, takes word timings from the TTS alignment instead of Scribe, runs `pick_take.py` and leaves `voice.mp3` + `words.json`. Keep keys and voice ids in the environment or `~/.tacdel.env`, never in the repo.
 5. **Timing.** Run `python3 ../tacdel-shorts/tools/timing.py caps words.json chunks.txt` to get `CAPS`. Set `DUR` = last end + about 1.6 s, and `PAGE_END` = the same number.
 6. **Animate.** Copy the closest `looks/*.html` and keep its helpers, Tac, captions function, player block, `WARP`/`warp`, `PAGE_END`, `LOOK`, the `?pending` tag and `Object.assign(window, …)`. Replace `CAPS`, `DUR`, the scene functions, `CUES` and `MUSIC`. Key every move to `S(k)` (start of chunk k), `E(k)` or `M(k, f)`.
