@@ -20,7 +20,8 @@ Each morning send the 5 best items, not more. For each item:
    won't fit), drawable as flat shapes. No photoreal scenes, no text inside images, no numbers that
    aren't in FACTS.
 6. VOICEOVER: 95-110 words, short sentences, first person, numbers written as words ("sixty-one point
-   eight"), no audio tags. End on my test as a cliffhanger. Never claim a result I don't have yet.
+   eight"), no audio tags. End on the payoff, the takeaway, or a short question to the viewer about this Short; never tease
+   another post ("next time...", "follow for part 2"). Never claim a result I don't have yet.
 7. CAPTION: 70 words max, same rounding as the voiceover, 3 hashtags.
 8. SCORE: wow (1-5), practical value (1-5), can-I-test-it (1-5). Drop anything under 3 on any of them.
    Flag items older than 5 days as "likely covered already".

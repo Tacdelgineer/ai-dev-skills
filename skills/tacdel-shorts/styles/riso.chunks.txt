@@ -15,5 +15,5 @@ you split the memory ahead of time.
 My Spark's Linux shares one pool. || My Spark’s Linux shares one pool.
 Price as tested: just over six thousand two hundred dollars. || Price as tested: just over $6,200.
 Fit, or speed?
-I'm running the same coding test on my Spark next. || I’m running the same coding test on my Spark next.
-Follow for the numbers.
+If it won't load, speed doesn't matter. || If it won’t load, speed doesn’t matter.
+Which would you pick?

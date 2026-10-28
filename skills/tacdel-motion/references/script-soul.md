@@ -25,6 +25,8 @@ a person who finds it funny and a little bit moving, to one friend.
    hear a short one land after a long one: "Nobody asked. He's very proud."
 7. **End on a feeling or a callback.** Bring back the opening image, or give one small human beat. If there's
    a practical tip, say it the way a friend would ("tell it twice, it won't mind"), not like a lesson.
+   A short question to the viewer about this Short works too. Never tease, promote or advertise another
+   episode or video ("next time...", "in my next one...", "follow to see...").
 8. **Facts stay exact.** Soul never bends a number or a claim. A vendor number is still said as the
    vendor's, for their system. Plain words: explain jargon or cut it, and use 1–2 numbers at most.
 9. **Two hooks, keep one.** Write two openings and keep the one a friend would repeat to someone else.

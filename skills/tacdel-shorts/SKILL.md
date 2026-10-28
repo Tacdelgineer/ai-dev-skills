@@ -28,7 +28,8 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
    latency or cost number, write "not given" and never infer one. Check that the test can run on the
    DGX Spark (ARM64, 128 GB unified memory).
 2. **Script.** Write 95–110 words in the first person, in short sentences. The result or surprise comes
-   first, and the last line is Alireza's own test as a cliffhanger. Never claim a result he doesn't have.
+   first. The last line is the payoff, the takeaway, or a short question to the viewer about this Short;
+   never a tease of another post ("follow for part 2", "results next"). Never claim a result he doesn't have.
    Write numbers as words ("sixty-one point eight") and write no audio tags. Use
    `<break time="0.5s" />` at most twice. Then write `chunks.txt`: one caption chunk per line in the
    spoken words, with ` || shown text` added where the screen should show digits.
@@ -59,7 +60,6 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
    takes about 10 minutes on 2 CPUs. Run at most 2 renders at once, and render only after the sheet is right.
 8. **Deliver.** Send the MP4 and the HTML. Notes: the title, the voiceover as recorded, the fact table with
    links, a post caption of 70 words or fewer with the same rounding as the voiceover, and 3 hashtags.
-   Name the payoff post ("Part 2: I ran it") that the cliffhanger promises.
 
 **Re-time a finished Short to a new take** (no scene edits): run
 `python3 tools/timing.py warp words.json chunks.txt page.html --write`, then render again.
@@ -68,6 +68,8 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
 
 - Numbers on screen come only from the fact table. Illustrations (receipts, tickets, meters, logs) carry no
   invented numbers, bars start at zero, and vendor numbers say "vendor-reported" on screen.
+- Never tease, promote or advertise another Short or video, in the voice, on screen or in the caption
+  ("next time...", "follow for the numbers", "subscribe to see..."). End on this Short's payoff.
 - Compared things get equal visual weight: same size, same color. A label says who wins.
 - Captions are white text on a dark pill, with no word-by-word animation.
 - Example rules or data shown on screen are labelled as examples.

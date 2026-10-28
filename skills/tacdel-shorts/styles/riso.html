@@ -39,7 +39,7 @@ const CAPS = [
   ['The 5090 laptop couldn’t run that model at all.', 21.36, 24.4], ['But on models that fit in its 24 gigs,', 24.64, 26.96],
   ['it was 2.3 times faster.', 27.0, 29.32], ['The catch: on Windows,', 29.6, 31.36], ['you split the memory ahead of time.', 31.44, 33.36],
   ['My Spark’s Linux shares one pool.', 33.44, 35.36], ['Price as tested: just over $6,200.', 35.92, 39.92],
-  ['Fit, or speed?', 40.0, 41.52], ['I’m running the same coding test on my Spark next.', 41.55, 44.24], ['Follow for the numbers.', 44.36, 45.44],
+  ['Fit, or speed?', 40.0, 41.52], ['If it won’t load, speed doesn’t matter.', 41.55, 44.24], ['Which would you pick?', 44.36, 45.44],
 ];
 const SCENES = [0, 5.36, 11.52, 21.36, 29.6, 35.92, 40.0], DUR = 46.6;
 // re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
@@ -220,8 +220,8 @@ function s7(lt, t) { // end card
   const p = eo((t - 41.4) / .5);
   if (p > 0) { ctx.save(); ctx.globalAlpha = p; ctx.translate(0, (1 - p) * 50);
     laptop(215, 1010, 'RTX SPARK', codeScreen(5), { s: .55 }); laptop(540, 1010, 'RTX 5090', codeScreen(4, C.dim), { s: .55 }); sparkBox(865, 990, 'MY SPARK', .75); ctx.restore(); }
-  if (t > 41.6) { ctx.save(); ctx.globalAlpha = eo((t - 41.6) / .4); mono('SAME CODING TEST ON MY SPARK · NEXT', 540, 1220, 32, C.white); ctx.restore(); }
-  if (t > 44.3) { ctx.save(); ctx.globalAlpha = eo((t - 44.3) / .4); mono('FOLLOW FOR THE NUMBERS', 540, 1300, 34, C.orange); mono('TACDEL', 540, 1365, 28, C.dim); ctx.restore(); }
+  if (t > 41.6) { ctx.save(); ctx.globalAlpha = eo((t - 41.6) / .4); mono('IF IT WON’T LOAD, SPEED DOESN’T MATTER', 540, 1220, 32, C.white); ctx.restore(); }
+  if (t > 44.3) { ctx.save(); ctx.globalAlpha = eo((t - 44.3) / .4); mono('WHICH WOULD YOU PICK?', 540, 1300, 34, C.orange); mono('TACDEL', 540, 1365, 28, C.dim); ctx.restore(); }
 }
 const FN = [s1, s2, s3, s4, s5, s6, s7];
 

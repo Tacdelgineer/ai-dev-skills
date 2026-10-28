@@ -94,12 +94,14 @@ moment they saw.
 > Ask your agent what it checked that correction against. Two: cap the bet size. Three: race
 > any agent against a dumb bot before you trust it."
 
-**9. The outro teases the next video.** Name the next experiment and the question it asks.
+**9. End on this video, never the next one.** The last line is the payoff, the takeaway, or
+a short question to the viewer about this video. Never tease, promote or advertise another
+episode or video: no "next time...", "in my next video...", "subscribe to see...".
 
-> Before: "If you'd like the next one to test something specific, tell me in the comments."
-> After: "Next time, I'm taking AI agents to an obstacle course. Real jobs to do, with
-> instructions that are quietly wrong. Same question as today: when the information is bad,
-> which ones notice? Subscribe, and you'll see who makes it through."
+> Before: "Next time, I'm taking AI agents to an obstacle course. Subscribe, and you'll see
+> who makes it through."
+> After: "So be most suspicious of the update that looks the most official. Which one would
+> your agent have believed?"
 
 Keep in the script header: the main cast, the order the ideas arrive, the spoken word count,
 and a list of what left the voice (it stays on screen and in the Check lines).
@@ -122,7 +124,7 @@ rules above decide the order the ideas arrive in.
 8. **The honest problem** (memorizing instead of learning — the surprise exam).
 9. **The real test** on locked-away data (the vault).
 10. **Challengers:** an AI model and simple baselines.
-11. **The twist, the verdict and the call to action.**
+11. **The twist, the verdict and the takeaways** (rule 8), ending on rule 9.
 
 ## Voice
 
@@ -133,7 +135,8 @@ rules above decide the order the ideas arrive in.
 - **Light jokes only when they're true** (the headline AI "really only had one idea").
 - **End the verdict as simple Q&A:** "Can a fly brain trade? No. Is real wiring better than
   random? Yes. Because it knows how to sit still."
-- **Close** by teasing the next video (rule 9), plus the live link if there is one.
+- **Close** on the payoff, the takeaway or a question about this video (rule 9), plus the live
+  link if there is one. Never tease another video.
 
 ## Plain-word swaps
 

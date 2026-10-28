@@ -212,7 +212,7 @@ function s7(lt, t) { // half the receipt might be optional
   ctx.save(); ctx.translate(-u * 40, 0); receipt(300, 640, 240, 680, ITEMS, 15); ctx.restore();
   ctx.save(); ctx.translate(540 + u * 360, 980); ctx.rotate(u * .5); ctx.translate(-540, -980); receipt(540, 640, 240, 680, ITEMS, 16); ctx.restore();
   ransom(['half the receipt', 'might be optional.'], 300, 92, 70, t - 39.7);
-  dymo('TACDEL · FOLLOW FOR THE TEST', 540, 1370, 30, -.02, eo(stepT(t - 40.9) / .2));
+  dymo('TACDEL', 540, 1370, 30, -.02, eo(stepT(t - 40.9) / .2));
 }
 const FN = [s1, s2, s3, s4, s5, s6, s7];
 

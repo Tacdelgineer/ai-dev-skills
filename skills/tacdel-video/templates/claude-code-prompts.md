@@ -47,7 +47,8 @@ twist nobody else tests.] Style: riso / papercut / terminal, 9-10 minutes.
    why it matters in the first minute; main cast of at most 3 plus a yardstick, the rest are
    "the rest"; one idea at a time, right before it's needed; numbers on screen, not in the
    voice; character arcs and callbacks; 2-3 practical takeaways tied to moments in the video;
-   the outro teases the next video ([next idea]). ~1,400-1,500 spoken words. Fact check into
+   end on the payoff, the takeaway or a short question about this video, never a tease of
+   another video. ~1,400-1,500 spoken words. Fact check into
    video/FACTCHECK.md. Then STOP and ask me to approve the script.
 5. VOICE + RENDER (phase 4, after my approval): copy scripts/chapters/ from the skill into
    video/. Voice each chapter once through the ElevenLabs API with the settings in
