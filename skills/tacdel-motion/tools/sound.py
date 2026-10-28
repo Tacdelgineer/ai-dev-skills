@@ -1,7 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy>=1.26", "scipy>=1.11"]
+# ///
 """tacdel episode audio: original code-composed music + SFX (synth + ElevenLabs files) + optional voice, mixed.
 
-  python3 sound.py <page.html> <out.m4a> [voice.mp3]
+  uv run sound.py <page.html> <out.m4a> [voice.mp3]
 
 Reads CUES / MUSIC / DUR / WARP / CAPS from the page (page time) and maps them to video time through the
 page's WARP (so a re-timed page keeps its sounds on the action). Music ducks under the voice; with no voice
@@ -156,7 +160,9 @@ def drum_wood(v=1.):
     t = tt(.08); return att(np.sin(2 * np.pi * 1250 * t) * np.exp(-t * 60) * v * .7 + np.sin(2 * np.pi * 2500 * t) * np.exp(-t * 90) * v * .2, .0005)
 def drum_snare(v=1.):
     t = tt(.22); return (bp(rng.standard_normal(len(t)), 1500, 7000) * np.exp(-t * 20) * .7 + np.sin(2 * np.pi * 200 * t) * np.exp(-t * 30) * .4) * v
-INST = dict(marimba=inst_marimba, epiano=inst_epiano, glock=inst_glock, pluck=inst_pluck, bass=inst_bass, pad=inst_pad, musicbox=inst_musicbox)
+def inst_chip(f, d, v=1.):  # soft square lead (odd harmonics), for the terminal look
+    t = tt(min(d + .15, 1.2)); x = sum(np.sin(2 * np.pi * f * h * t) / h for h in (1, 3, 5, 7)) * np.exp(-t * 4) * np.clip(1 - (t - d) / .1, 0, 1); return att(lp(x * v * .8, 3200), .004)
+INST = dict(chip=inst_chip, marimba=inst_marimba, epiano=inst_epiano, glock=inst_glock, pluck=inst_pluck, bass=inst_bass, pad=inst_pad, musicbox=inst_musicbox)
 DRUM = dict(kick=drum_kick, clap=drum_clap, hat=drum_hat, shaker=drum_shaker, wood=drum_wood, snare=drum_snare)
 
 # chord name -> midi notes (root position, mid register)
@@ -285,6 +291,27 @@ STYLES = {
    'success':{'chords': ['Cmaj7', 'Fmaj7', 'G7', 'Cmaj7'], 'layers': {'chords2:epiano': .32, 'arp8:glock': .14, 'bass': .32, 'kicklofi': .3, 'snare24': .16, 'hat8': .12}, 'swing': .3, 'gain': 1.05},
    'explain':{'chords': ['Fmaj7', 'Em7', 'Dm7', 'Cmaj7'], 'layers': {'chords2:epiano': .3, 'bass1': .28, 'kicklofi': .22, 'hat8': .08}, 'swing': .3, 'gain': .95},
    'outro':  {'chords': ['Fmaj7', 'G7', 'Cmaj7'], 'layers': {'chords:epiano': .3, 'mel:glock': .16, 'bass1': .28}, 'mel': [[[0, 2, 2], [2, 1, 2]], [[0, 3, 2], [2, 2, 2]], [[0, 0, 4]]], 'gain': .95, 'release': 2.0},
+ }},
+ 'terminal': {'bpm': 92, 'wet': .3, 'decay': .7, 'secs': {
+   'boot':   {'chords': ['Am', 'F', 'C', 'G'], 'layers': {'arp16:chip': .16, 'bass1': .26, 'hat16': .06}, 'gain': .9},
+   'inbox':  {'chords': ['Am', 'F', 'C', 'G'], 'layers': {'arp8:chip': .2, 'bass8': .3, 'kick13': .26, 'hat8': .1}, 'gain': 1.0},
+   'hidden': {'chords': ['Am'], 'layers': {'pad': .14, 'tick4': .08}, 'gain': .6, 'hard': True, 'fadein': .3},
+   'obey':   {'chords': ['Dm', 'Am', 'E7', 'Am'], 'layers': {'pulse': .32, 'tick8': .2, 'stab:chip': .16, 'kick4': .28}, 'oct': -1, 'gain': 1.0, 'release': .2},
+   'stop':   None,
+   'defend': {'chords': ['F', 'G', 'Am', 'Em'], 'layers': {'arp8:chip': .18, 'bass': .3, 'kick13': .24, 'snare24': .12, 'hat8': .08}, 'gain': 1.0},
+   'verdict':{'chords': ['Fmaj7', 'Em7', 'Dm7', 'Am7'], 'layers': {'chords2:epiano': .28, 'arp8:glock': .08, 'bass1': .26, 'kicklofi': .2, 'hat8': .08}, 'swing': .2, 'gain': .95},
+   'outro':  {'chords': ['Fmaj7', 'G', 'Am'], 'layers': {'chords:epiano': .28, 'mel:chip': .14, 'bass1': .26}, 'mel': [[[0, 2, 2], [2, 1, 2]], [[0, 3, 2], [2, 2, 2]], [[0, 0, 4]]], 'gain': .95, 'release': 2.0},
+ }},
+ 'papercut': {'bpm': 104, 'wet': .2, 'decay': .45, 'secs': {
+   'intro':  {'chords': ['C', 'Am', 'F', 'G'], 'layers': {'offbeat:pluck': .3, 'arp8:marimba': .16, 'bass1': .26, 'shaker16': .1}, 'gain': .9},
+   'work':   {'chords': ['C', 'G', 'Am', 'F'], 'layers': {'arp8:marimba': .26, 'bass8': .3, 'kick13': .26, 'tick8': .14, 'shaker16': .08}, 'gain': 1.0},
+   'sneak':  {'chords': ['Am', 'E', 'Am', 'E7'], 'layers': {'offbeat:pluck': .34, 'bass': .28, 'tick4': .2}, 'oct': -1, 'gain': .95},
+   'snip':   {'chords': ['Am'], 'layers': {'pad': .12}, 'gain': .6, 'hard': True, 'fadein': .3},
+   'caught': {'chords': ['Dm', 'Am', 'E7', 'Am'], 'layers': {'pulse': .3, 'tick8': .2, 'stab:pluck': .18, 'kick4': .26}, 'oct': -1, 'gain': 1.0, 'release': .2},
+   'stop':   None,
+   'lock':   {'chords': ['F', 'G', 'Am', 'Em'], 'layers': {'arp8:marimba': .2, 'bass': .3, 'kick13': .22, 'shaker16': .1}, 'gain': 1.0},
+   'honest': {'chords': ['Fmaj7', 'Em7', 'Dm7', 'Cmaj7'], 'layers': {'chords2:epiano': .28, 'arp8:glock': .08, 'bass1': .26, 'kicklofi': .18, 'shaker16': .06}, 'swing': .2, 'gain': .95},
+   'outro':  {'chords': ['F', 'G', 'C'], 'layers': {'chords:marimba': .28, 'mel:glock': .16, 'bass1': .26}, 'mel': [[[0, 2, 2], [2, 1, 2]], [[0, 3, 2], [2, 2, 2]], [[0, 0, 4]]], 'gain': .95, 'release': 2.0},
  }},
  'factory': {'bpm': 100, 'wet': .24, 'secs': {
    'intro':  {'chords': ['C', 'Em', 'F', 'G'], 'layers': {'arp8:musicbox': .26, 'bass1': .26, 'tick4': .1}, 'gain': .9},

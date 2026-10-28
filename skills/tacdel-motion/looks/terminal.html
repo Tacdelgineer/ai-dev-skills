@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terminal look · tacdel</title>
+<!--
+  tacdel motion · Terminal look · 1080x1920 · 30 fps
+  Green phosphor on dark glass: everything is drawn at full size onto an off-screen screen, then gets bloom, scanlines,
+  a rolling refresh band, curved glass, a vignette and a bezel (palette and glass from tacdel-shorts styles/crt.html).
+  Tac is a cyan phosphor outline (orange antenna ball + orange eye ring); Chat is a lilac outline.
+  The scenes below are a short demo of the parts: copy this file and replace CAPS, DUR, the scenes, CUES and MUSIC.
+  URL ?clean · ?nocaps · ?pending (review tag) · ?t=12 freezes a moment · Space play/pause · R restart
+-->
+<style>
+  html,body{margin:0;height:100%;background:#000}
+  body{display:flex;align-items:center;justify-content:center}
+  canvas{height:100vh;max-width:100vw;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920;
+const cv = document.getElementById('c'), out = cv.getContext('2d');
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const scr = mk(W, H), ctx = scr.getContext('2d'); // scenes draw here; the glass pass copies it to the visible canvas
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3);
+const eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.7; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const SANS = '"Inter","Helvetica Neue",Arial,sans-serif', MONO = '"DejaVu Sans Mono",Menlo,Consolas,"Courier New",monospace';
+const Q = new URLSearchParams(location.search), CAP_ON = !Q.has('nocaps'), PENDING = Q.has('pending');
+
+/* ---------- timing (captions from the voice; this demo's are estimated) ---------- */
+const CAPS = [
+  ['This is Tac.', 0.1, 0.9],
+  ['Tac lives in a terminal.', 1.1, 2.6],
+  ['Every line glows green,', 2.9, 4.3],
+  ['even the stamps.', 4.4, 5.6],
+];
+const DUR = 7.2;
+const PAGE_END = 7.2; // page-time end (DUR above is rewritten to video length when re-timed)
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const S = k => CAPS[k][1], E = k => CAPS[k][2], M = (k, f) => lerp(S(k), E(k), f);
+
+/* ---------- terminal palette ---------- */
+const G = '#4dff86', GD = '#1f8a45', GH = '#d4ffe0', BGC = '#03120a', GLASS = '#04170f';
+const CY = '#62f3ff', CYD = '#1d7480', OR = '#ff7f1f', LIL = '#c9a6ff', RED = '#ff5a5a', AMB = '#ffd257';
+const N = 120, TH = Array.from({ length: N }, (_, k) => -Math.PI / 2 + k / N * 2 * Math.PI);
+const superE = (a, b, n) => TH.map(th => { const c = Math.cos(th), s = Math.sin(th); return [a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]; });
+function trace(pts) { ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+const BODYP = superE(.5, .44, 3.4);
+function glow(col, w, blur) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.shadowColor = col; ctx.shadowBlur = blur; ctx.stroke(); ctx.shadowBlur = 0; }
+function txt(s, x, y, size, col = G, align = 'left', wt = 700, a = 1, gl = 10) { if (a <= 0 || !s) return; ctx.save(); ctx.globalAlpha *= a; ctx.font = `${wt} ${size}px ${MONO}`; ctx.textAlign = align; ctx.fillStyle = col;
+  if (gl) { ctx.shadowColor = col; ctx.shadowBlur = gl; } ctx.fillText(s, x, y); ctx.restore(); }
+function tw(s, size, wt = 700) { ctx.font = `${wt} ${size}px ${MONO}`; return ctx.measureText(s).width; }
+function inv(s, x, y, size, col = G, align = 'left', a = 1) { if (a <= 0) return; const w = tw(s, size), x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  ctx.save(); ctx.globalAlpha *= a; ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 18; ctx.fillRect(x0 - size * .25, y - size * .86, w + size * .5, size * 1.12); ctx.restore(); txt(s, x0, y, size, BGC, 'left', 700, a, 0); }
+const typed = (s, t, t0, cps = 40) => s.slice(0, clamp(Math.floor((t - t0) * cps), 0, s.length));
+function cursor(x, y, size, t, col = G) { if ((t * 2.4) % 1 < .55) { ctx.save(); ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.fillRect(x + 4, y - size * .82, size * .58, size); ctx.restore(); } }
+function term(x, y, w, h, title, a = 1, col = G) { if (a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.fillStyle = 'rgba(2,14,8,.92)'; ctx.fillRect(x, y, w, h);
+  ctx.beginPath(); ctx.rect(x, y, w, h); glow(col, 3, 16); ctx.fillStyle = col; ctx.fillRect(x, y, w, 44); ctx.restore();
+  txt(title, x + 18, y + 31, 24, BGC, 'left', 700, a, 0); txt('_ □ x', x + w - 18, y + 31, 22, BGC, 'right', 700, a, 0); }
+function stamp(s, x, y, size, rot, u, col = RED) { if (u <= 0) return; const sc = lerp(2, 1, eo(u / .3)), a = clamp(u / .1);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc, sc); ctx.globalAlpha *= a; ctx.font = `900 ${size}px ${MONO}`;
+  const w = ctx.measureText(s).width + size * .9, h = size * 1.5; ctx.fillStyle = 'rgba(3,18,10,.85)'; ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); glow(col, size * .09, 22); ctx.beginPath(); ctx.rect(-w / 2 + size * .16, -h / 2 + size * .16, w - size * .32, h - size * .32); glow(col, size * .03, 10);
+  ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 18; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, 0, size * .06); ctx.restore(); }
+function highlight(x, y, w, h, u, col = AMB, a = 1) { if (u <= 0) return; ctx.save(); ctx.globalAlpha *= a * .38; ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = col;
+  ctx.fillRect(x, y, w * eo(u), h); ctx.restore(); }
+
+/* ---------- Tac: a cyan phosphor outline on dark glass ---------- */
+function tac(x, y, s, o = {}) {
+  if (s < 1) return; ctx.save(); ctx.translate(x, y); ctx.globalAlpha *= (o.a ?? 1);
+  ctx.save(); ctx.globalAlpha *= .5; ctx.beginPath(); ctx.ellipse(0, s * .6, s * .42, s * .05, 0, 0, 7); ctx.fillStyle = 'rgba(98,243,255,.10)'; ctx.fill(); ctx.restore();
+  ctx.rotate(o.rot || 0); ctx.scale(s * (o.sx || 1), s * (o.sy || 1)); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const st = o.step || 0; ctx.beginPath(); ctx.roundRect(-.29, .34 - Math.max(0, Math.sin(st)) * .07, .17, .24, .07); ctx.roundRect(.12, .34 - Math.max(0, -Math.sin(st)) * .07, .17, .24, .07);
+  ctx.fillStyle = GLASS; ctx.fill(); glow(CY, .035, 14);
+  ctx.beginPath(); ctx.moveTo(0, -.42); ctx.lineTo((o.ant || 0), -.58); glow(CY, .035, 14);
+  ctx.save(); ctx.fillStyle = OR; ctx.shadowColor = OR; ctx.shadowBlur = 26; ctx.beginPath(); ctx.arc(o.ant || 0, -.64, .08, 0, 7); ctx.fill(); ctx.restore();
+  if (o.arms) { ctx.beginPath(); o.arms.forEach(([a, b, c, d]) => { ctx.moveTo(a, b); ctx.lineTo(c, d); }); glow(CY, .05, 14); }
+  trace(BODYP); ctx.fillStyle = GLASS; ctx.fill(); glow(CY, .045, 26);
+  ctx.save(); trace(BODYP); ctx.clip(); ctx.strokeStyle = 'rgba(98,243,255,.10)'; ctx.lineWidth = .012; ctx.beginPath(); for (let k = -.44; k < .44; k += .05) { ctx.moveTo(-.5, k); ctx.lineTo(.5, k); } ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.scale(.88, .86); trace(BODYP); ctx.restore(); ctx.strokeStyle = 'rgba(98,243,255,.28)'; ctx.lineWidth = .012; ctx.stroke();
+  ctx.beginPath(); ctx.arc(-.06, -.04, .36, Math.PI * 1.08, Math.PI * 1.32); glow('rgba(212,255,255,.7)', .025, 8);
+  if (o.belt) { ctx.beginPath(); ctx.moveTo(-.48, .26); ctx.lineTo(.48, .26); glow(CY, .03, 10); }
+  const ey = -.04, er = .25;
+  if (o.happy) { ctx.beginPath(); ctx.arc(0, ey + .07, .15, Math.PI * 1.15, Math.PI * 1.85); glow(CY, .06, 18); }
+  else { ctx.fillStyle = '#062a30'; ctx.beginPath(); ctx.arc(0, ey, er, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, ey, er, 0, 7); glow(OR, .07, 22);
+    const lx = clamp(o.lx || 0, -1, 1) * .1, ly = clamp(o.ly || 0, -1, 1) * .09; ctx.save(); ctx.fillStyle = CY; ctx.shadowColor = CY; ctx.shadowBlur = 20; ctx.beginPath(); ctx.arc(lx, ey + ly, .105, 0, 7); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#04161a'; ctx.beginPath(); ctx.arc(lx, ey + ly, .045, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx - .04, ey + ly - .045, .026, 0, 7); ctx.fill();
+    const lid = Math.max(o.squint ? .55 : 0, o.blink || 0); if (lid > 0) { ctx.save(); ctx.beginPath(); ctx.arc(0, ey, er - .035, 0, 7); ctx.clip(); const ly0 = ey - er + (er * 2) * lid * .62;
+      ctx.fillStyle = GLASS; ctx.fillRect(-.35, ey - er - .05, .7, ly0 - (ey - er - .05)); ctx.beginPath(); ctx.moveTo(-.3, ly0); ctx.lineTo(.3, ly0); glow(CY, .03, 10); ctx.restore(); } }
+  if (o.prop) o.prop();
+  ctx.restore();
+}
+/* ---------- Chat (a plain chatbot): a lilac speech-bubble outline ---------- */
+const BUB = (() => { const p = superE(.56, .42, 3); return p.map(([x, y], k) => { const th = TH[k], w = Math.exp(-Math.pow(th - 2.05, 2) / (2 * .06 * .06)); return [x * (1 + .45 * w) - w * .12, y * (1 + .55 * w)]; }); })();
+function chat(x, y, s, o = {}) {
+  if (s < 1) return; ctx.save(); ctx.translate(x, y); ctx.globalAlpha *= (o.a ?? 1);
+  ctx.rotate(o.rot || 0); ctx.scale(s * (o.sx || 1), s * (o.sy || 1)); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.roundRect(-.26, .38, .15, .18, .07); ctx.roundRect(.11, .38, .15, .18, .07); ctx.fillStyle = '#0d0a1c'; ctx.fill(); glow(LIL, .035, 14);
+  if (o.arms) { ctx.beginPath(); o.arms.forEach(([a, b, c, d]) => { ctx.moveTo(a, b); ctx.lineTo(c, d); }); glow(LIL, .05, 14); }
+  trace(BUB); ctx.fillStyle = '#0d0a1c'; ctx.fill(); glow(LIL, .045, 26);
+  ctx.save(); trace(BUB); ctx.clip(); ctx.strokeStyle = 'rgba(201,166,255,.10)'; ctx.lineWidth = .012; ctx.beginPath(); for (let k = -.44; k < .6; k += .05) { ctx.moveTo(-.7, k); ctx.lineTo(.7, k); } ctx.stroke(); ctx.restore();
+  const lx = clamp(o.lx || 0, -1, 1) * .05, ly = clamp(o.ly || 0, -1, 1) * .04;
+  [-.17, .17].forEach(ex => { if (o.happy) { ctx.beginPath(); ctx.arc(ex, -.04, .07, Math.PI * 1.1, Math.PI * 1.9); glow(LIL, .05, 14); }
+    else { ctx.beginPath(); ctx.arc(ex, -.06, .1, 0, 7); glow(LIL, .03, 12); ctx.save(); ctx.fillStyle = LIL; ctx.shadowColor = LIL; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(ex + lx, -.06 + ly, .05, 0, 7); ctx.fill(); ctx.restore(); } });
+  ctx.beginPath(); if (o.oops) { ctx.moveTo(-.1, .16); ctx.quadraticCurveTo(0, .1, .1, .16); } else ctx.arc(0, .08, .1, .2 * Math.PI, .8 * Math.PI); glow(LIL, .04, 12);
+  ctx.restore();
+}
+
+/* ---------- SFX cues + music sections (read by the mixer; page time) ---------- */
+const CUES = []; const cue = (t, s, g = 1, r = 1, off = 0, len = 0) => CUES.push([+t.toFixed(3), s, g, r, off, len]);
+cue(S(1) + .1, 'typing', .5, 1, 0, 1.2); cue(S(2) + .2, 'blip', .4); cue(S(3) + .3, 'stamp', .8); cue(PAGE_END - .4, 'whoosh', .3, .7);
+const MUSIC = [[0, 'boot'], [S(2), 'inbox'], [PAGE_END, 'end']];
+const GLITCH = [S(2)]; // page times of short horizontal-tear glitches
+const LOOK = 'terminal'; // music + sound palette in tools/sound.py
+Object.assign(window, { CUES, MUSIC, DUR, WARP, CAPS, LOOK });
+
+/* ---------- demo scene ---------- */
+function scene(t) {
+  txt('TERMINAL', 90, 330, 96, G, 'left', 800, 1, 22); txt('tacdel motion · look demo', 92, 382, 30, GD, 'left', 700, 1, 0);
+  term(90, 440, 900, 420, 'tty1 — tac@glass', 1);
+  const L = ['> tac --hello', 'hello. i am tac.', 'i live in a terminal.'];
+  L.forEach((l, k) => { const s = typed(l, t, S(1) + k * .5, 30); txt(s, 120, 540 + k * 56, 36, k ? GH : G, 'left', 700); if (s.length && s.length < l.length) cursor(120 + tw(s, 36), 540 + k * 56, 36, t); });
+  if (t > S(2)) { highlight(110, 618, 440, 48, (t - S(2) - .2) / .5); }
+  stamp('OK', 820, 760, 64, -.12, (t - S(3) - .3) / .45, G);
+  tac(380, 1150, 330, { lx: .4, ly: -.2, blink: t % 3.2 > 3.05 ? 1 : 0, happy: t > S(3) + .4 });
+  chat(800, 1180, 230 * back((t - S(2) - .1) / .4), { lx: -.6, ly: -.2, happy: t > S(3) + .5 });
+}
+
+/* ---------- the glass: bloom, scanlines, refresh band, curvature, vignette, bezel ---------- */
+const comp = mk(W, H), cc = comp.getContext('2d'), blm = mk(135, 240), bl = blm.getContext('2d');
+const SCAN = (() => { const s = mk(1, 3), g = s.getContext('2d'); g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(0, 2, 1, 1); return cc.createPattern(s, 'repeat'); })();
+function glass(t, traw) {
+  bl.clearRect(0, 0, 135, 240); bl.imageSmoothingEnabled = true; bl.drawImage(scr, 0, 0, 135, 240);
+  cc.globalCompositeOperation = 'source-over'; cc.globalAlpha = 1; cc.drawImage(scr, 0, 0);
+  cc.globalCompositeOperation = 'lighter'; cc.imageSmoothingEnabled = true; cc.globalAlpha = .6; cc.drawImage(blm, 0, 0, W, H);
+  cc.globalAlpha = 1; cc.globalCompositeOperation = 'source-over'; cc.fillStyle = SCAN; cc.fillRect(0, 0, W, H);
+  const by = ((t * .42) % 1.25) * H - 240, g = cc.createLinearGradient(0, by, 0, by + 300);
+  g.addColorStop(0, 'rgba(110,255,150,0)'); g.addColorStop(.5, 'rgba(110,255,150,.05)'); g.addColorStop(1, 'rgba(110,255,150,0)'); cc.fillStyle = g; cc.fillRect(0, by, W, 300);
+  out.setTransform(1, 0, 0, 1, 0, 0); out.globalAlpha = 1; out.globalCompositeOperation = 'source-over'; out.fillStyle = '#000'; out.fillRect(0, 0, W, H);
+  const off = clamp((t - (PAGE_END - .4)) / .35), sy = Math.max(.003, 1 - eio(off)), gl = GLITCH.some(g => t > g && t < g + .12), flick = .95 + rnd(Math.floor(traw * 60)) * .05;
+  out.save(); out.translate(0, H / 2); out.scale(1, sy); out.translate(0, -H / 2); out.globalAlpha = flick;
+  for (let y = 0; y < H; y += 6) { const ny = (y + 3 - H / 2) / (H / 2), w = W * (1 - .04 * ny * ny), jx = gl && rnd(y * .01 + Math.floor(t * 60)) > .7 ? (rnd(y + t) - .5) * 60 : 0;
+    out.drawImage(comp, 0, y, W, 6, (W - w) / 2 + jx, y, w, 6); }
+  out.restore();
+  if (off > 0) { out.fillStyle = `rgba(220,255,230,${clamp(off * 1.6) * (1 - clamp((off - .8) / .2))})`; out.fillRect(W * .1 * off, H / 2 - 3, W - W * .2 * off, 6); }
+  const v = out.createRadialGradient(540, 960, 560, 540, 960, 1220); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.7)'); out.fillStyle = v; out.fillRect(0, 0, W, H);
+  const gr = out.createLinearGradient(0, 0, W, H * .6); gr.addColorStop(0, 'rgba(255,255,255,.05)'); gr.addColorStop(.35, 'rgba(255,255,255,0)'); out.fillStyle = gr; out.fillRect(0, 0, W, H);
+  out.beginPath(); out.rect(0, 0, W, H); out.roundRect(22, 22, W - 44, H - 44, 80); out.fillStyle = '#050605'; out.fill('evenodd');
+  return off;
+}
+
+/* ---------- captions (tacdel-shorts style, over the glass) ---------- */
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  out.save(); out.font = `700 46px ${SANS}`; out.textAlign = 'center'; out.textBaseline = 'middle'; out.letterSpacing = '0px';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (out.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => out.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  out.fillStyle = 'rgba(8,8,8,.85)'; out.beginPath(); out.roundRect(540 - w / 2, y0, w, h, 28); out.fill();
+  out.fillStyle = '#ffffff'; lines.forEach((l, i) => out.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); out.restore();
+}
+
+/* ---------- frame ---------- */
+function draw(traw) {
+  const t = warp(traw);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([]); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+  const bg = ctx.createRadialGradient(540, 900, 60, 540, 960, 1250); bg.addColorStop(0, '#08261a'); bg.addColorStop(1, BGC); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  scene(t);
+  const off = glass(t, traw);
+  if (off < .05) captions(t);
+  if (PENDING) { out.save(); out.font = `700 26px ${SANS}`; out.fillStyle = 'rgba(8,8,8,.7)'; out.beginPath(); out.roundRect(40, 150, 640, 44, 22); out.fill(); out.fillStyle = '#fff'; out.textBaseline = 'middle'; out.fillText('REVIEW COPY · voice pending · timing estimated', 60, 173); out.restore(); }
+}
+
+/* ---------- player (works with tools/grab.cjs, tools/still.cjs and render.cjs) ---------- */
+let T = Q.has('t') ? clamp(+Q.get('t'), 0, DUR - .001) : 0, playing = !Q.has('t'), prev = null;
+function frame(now) { if (playing && prev !== null) T = (T + Math.min(.1, (now - prev) / 1000)) % DUR; prev = now; draw(T); requestAnimationFrame(frame); }
+addEventListener('keydown', e => { if (e.key === ' ') { playing = !playing; e.preventDefault(); } else if (e.key.toLowerCase() === 'r') { T = 0; playing = true; } });
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { T = s; playing = false; draw(T); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

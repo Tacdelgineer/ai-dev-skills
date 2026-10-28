@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paper-cut look · tacdel</title>
+<!--
+  tacdel motion · Paper-cut look · 1080x1920 · 30 fps render, motion on twos (12 fps)
+  Engine from looks/living.html (player, captions, WARP/warp, PAGE_END, LOOK, ?pending, S/E/M, CUES, MUSIC).
+  Paper helpers from tacdel-shorts styles/papercut.html: cut and torn paper with a grain texture and drop shadows,
+  tape, push pins, yarn, ransom letters, dymo labels, a rubber stamp, a cork board, paper slips.
+  Tac (one-eyed robot, cyan body, orange antenna ball, orange eye ring) and Chat (lilac speech-bubble creature)
+  are cut from coloured paper, with a drop shadow and a strip of tape.
+  This file is a short demo of the look; copy it and replace CAPS, DUR, the scenes, CUES and MUSIC.
+  URL ?clean · ?nocaps · ?pending (review tag) · ?t=12 freezes a moment · Space play/pause · R restart
+-->
+<style>
+  html,body{margin:0;height:100%;background:#1a1612}
+  body{display:flex;align-items:center;justify-content:center}
+  canvas{height:100vh;max-width:100vw;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3);
+const eio = u => { u = clamp(u); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const back = u => { u = clamp(u); const c = 1.7; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const SANS = '"Inter","Helvetica Neue",Arial,sans-serif', SERIF = 'Georgia,"DejaVu Serif","Times New Roman",serif', TYPE = '"Courier New","Liberation Mono",Courier,monospace';
+const Q = new URLSearchParams(location.search), CAP_ON = !Q.has('nocaps'), PENDING = Q.has('pending');
+
+/* ---------- timing (demo captions; replace with timing.py output) ---------- */
+const CAPS = [
+  ['This is the paper-cut look.', 0.2, 2.0],
+  ['Everything is cut, taped and pinned,', 2.3, 4.6],
+  ['and it moves on twos.', 4.8, 6.2],
+  ['Tac and Chat are paper too.', 6.5, 8.4],
+];
+const DUR = 10.0;
+const PAGE_END = 10.0; // page-time end (DUR above is rewritten to video length when re-timed)
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const S = k => CAPS[k][1], E = k => CAPS[k][2], M = (k, f) => lerp(S(k), E(k), f);
+
+/* ---------- paper: palette, texture, 12 fps boil ---------- */
+const C = { bg: '#e9dec7', cream: '#fbf6ea', kraft: '#c69a66', cork: '#c4915c', red: '#d4452a', teal: '#1f6a73', mustard: '#e5ad36', ink: '#221d19', news: '#d8d1c1', pink: '#eaa596',
+  green: '#4f8f4a', cyan: '#3fb3d6', cyanD: '#1f7ea6', cyanL: '#8ad8ee', orange: '#ef8424', lilac: '#b49df2', lilacD: '#7c63cf', steel: '#c9ced2', shadow: 'rgba(72,46,20,.30)' };
+let FQ = 0; // frame index on twos (12 per second); everything that boils reads it
+const jit = (k, amt) => (rnd(k * 7.3 + FQ * 1.91) - .5) * amt;
+function noiseCanvas(lo, hi, seed) { const s = document.createElement('canvas'); s.width = s.height = 256; const g = s.getContext('2d'), im = g.createImageData(256, 256);
+  for (let i = 0; i < im.data.length; i += 4) { const v = lo + rnd(seed + i * .37) * (hi - lo); im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } g.putImageData(im, 0, 0); return s; }
+const TEX = ctx.createPattern(noiseCanvas(200, 255, 3), 'repeat');
+const BG = (() => { const s = document.createElement('canvas'); s.width = W; s.height = H; const g = s.getContext('2d');
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'multiply'; g.fillStyle = g.createPattern(noiseCanvas(215, 255, 9), 'repeat'); g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 900; i++) { const x = rnd(i * 1.1) * W, y = rnd(i * 2.3 + 5) * H, a = rnd(i * 3.7) * 6.3, l = 6 + rnd(i * 4.1) * 22;
+    g.strokeStyle = rnd(i * 5.3) < .5 ? 'rgba(255,255,255,.35)' : 'rgba(120,90,50,.12)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l, y + Math.sin(a) * l * .3, x + Math.cos(a + .4) * l * 1.6, y + Math.sin(a + .4) * l); g.stroke(); }
+  const v = g.createRadialGradient(540, 960, 600, 540, 960, 1300); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(70,40,10,.22)'); g.fillStyle = v; g.fillRect(0, 0, W, H); return s; })();
+const poly = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); };
+function torn(x, y, w, h, seed, rough = 4, step = 15) { const pts = [], s = seed + (FQ % 3) * .013;
+  const edge = (x0, y0, x1, y1, k) => { const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.round(L / step)), nx = -(y1 - y0) / L, ny = (x1 - x0) / L;
+    for (let i = 0; i < n; i++) { const u = i / n, j = (rnd(s * 3.1 + k * 97 + i * 13.7) - .5) * rough * 2; pts.push([x0 + (x1 - x0) * u + nx * j, y0 + (y1 - y0) * u + ny * j]); } };
+  edge(x, y, x + w, y, 1); edge(x + w, y, x + w, y + h, 2); edge(x + w, y + h, x, y + h, 3); edge(x, y + h, x, y, 4); poly(pts); }
+function cutCircle(x, y, r, seed, rough = 2.5, n0 = 14) { const pts = [], n = Math.max(n0, Math.round(r / 5));
+  for (let i = 0; i < n; i++) { const a = i / n * 6.283, rr = r + (rnd(seed + i * 7.7 + (FQ % 3) * .01) - .5) * rough * 2; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); } poly(pts); }
+// one piece of paper: drop shadow (device space, so it stays the same size inside a scaled puppet), flat colour, grain
+function piece(path, col, sh = 1, edge = false, rule = 'nonzero') {
+  ctx.save(); path();
+  if (sh) { ctx.shadowColor = C.shadow; ctx.shadowOffsetX = 7 * sh; ctx.shadowOffsetY = 9 * sh; }
+  ctx.fillStyle = col; ctx.fill(rule); ctx.shadowColor = 'transparent';
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = TEX; ctx.fill(rule);
+  if (edge) { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'rgba(255,252,242,.75)'; ctx.lineWidth = 3; ctx.stroke(); }
+  ctx.restore(); }
+function tape(x, y, w, ang, h = 34, rough = 2.5, step = 9) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang); torn(-w / 2, -h / 2, w, h, x * .1 + y, rough, step); ctx.fillStyle = 'rgba(240,226,168,.86)'; ctx.fill(); ctx.strokeStyle = 'rgba(150,120,60,.25)'; ctx.lineWidth = Math.max(.002, h * .04); ctx.stroke(); ctx.restore(); }
+function pin(x, y, col = C.red, r = 15) { ctx.save(); ctx.fillStyle = 'rgba(72,46,20,.35)'; ctx.beginPath(); ctx.ellipse(x + 8, y + 10, r * .9, r * .6, .4, 0, 7); ctx.fill();
+  piece(() => cutCircle(x, y, r, x + y, 1.2), col, 0); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(x - r * .35, y - r * .35, r * .28, 0, 7); ctx.fill(); ctx.restore(); }
+function yarn(pts, col = C.red, w = 9) { // a wool strand: wobbly thick line with a twist
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+  pts.forEach(([x, y], i) => { const px = x + (i && i < pts.length - 1 ? jit(40 + i, 3) : 0), py = y + (i && i < pts.length - 1 ? jit(50 + i, 3) : 0); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.shadowColor = C.shadow; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); ctx.shadowColor = 'transparent';
+  ctx.setLineDash([w * .45, w * .9]); ctx.lineDashOffset = FQ % 2 * 2; ctx.strokeStyle = 'rgba(34,29,25,.28)'; ctx.lineWidth = w * .5; ctx.stroke(); ctx.restore(); }
+const sag = (x0, y0, x1, y1, d = 60, n = 12) => Array.from({ length: n + 1 }, (_, i) => { const u = i / n; return [lerp(x0, x1, u), lerp(y0, y1, u) + Math.sin(u * Math.PI) * d]; });
+function dymo(s, x, y, size = 30, ang = 0, a = 1, col = '#1c1b1d') { if (a <= 0) return; ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.rotate(ang); ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(s).width + 44, h = size * 1.55; piece(() => { ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 7); }, col);
+  ctx.fillStyle = '#000'; ctx.fillText(s, 1.5, 2.5); ctx.fillStyle = '#f2efe8'; ctx.fillText(s, 0, 0); ctx.restore(); }
+// ransom-note letters; lt = seconds since this line started; cx = centre
+function ransom(lines, y0, size, seed, lt, lh = 1.28, cx = 540, maxW = 950) {
+  const fonts = [s => `900 ${s}px ${SANS}`, s => `700 ${s * 1.06}px ${SERIF}`, s => `700 ${s * .98}px ${TYPE}`, s => `italic 700 ${s}px ${SERIF}`, s => `700 ${s * .9}px ${SANS}`];
+  const looks = [[C.cream, C.ink], [C.ink, C.cream], [C.red, C.cream], [C.mustard, C.ink], [C.teal, C.cream], [C.news, C.ink], [C.kraft, C.ink], [C.pink, C.ink]];
+  let k = 0;
+  lines.forEach((line, li) => {
+    const chars = [...line.toUpperCase()];
+    const widths = sz => chars.map((ch, i) => { ctx.font = fonts[Math.floor(rnd(seed + i + li * 31) * 5)](sz); return ch === ' ' ? sz * .32 : ctx.measureText(ch).width + sz * .3; });
+    let ws = widths(size), total = ws.reduce((a, b) => a + b + 6, -6); const fit = Math.min(1, maxW / total), sz = size * fit; if (fit < 1) { ws = widths(sz); total = ws.reduce((a, b) => a + b + 6, -6); }
+    let x = cx - total / 2; const y = y0 + li * size * lh;
+    chars.forEach((ch, i) => { const id = seed + i + li * 31, w = ws[i], cxx = x + w / 2; x += w + 6; k++; if (ch === ' ') return;
+      const tIn = lt - k * .04; if (tIn < 0) return;
+      const sc = lerp(1.45, 1, back(tIn / .25)), rot = (rnd(id * 1.7) - .5) * .22 + (rnd(id + FQ) - .5) * .015;
+      const [bg, fg] = looks[Math.floor(rnd(id * 2.3) * looks.length)], hh = sz * 1.18, dy = (rnd(id * 5.1) - .5) * sz * .12;
+      ctx.save(); ctx.translate(cxx, y + dy); ctx.rotate(rot); ctx.scale(sc, sc);
+      piece(() => (rnd(id * 3.9) < .5 ? torn(-w / 2, -hh / 2, w, hh, id, 3.5, 12) : (ctx.beginPath(), ctx.rect(-w / 2, -hh / 2, w, hh))), bg);
+      ctx.font = fonts[Math.floor(rnd(id) * 5)](sz); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = fg; ctx.fillText(ch, 0, sz * .05); ctx.restore(); });
+  });
+}
+function stamp(s, x, y, ang, p, size = 54, col = C.red) { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); const sc = lerp(1.8, 1, back(p / .4)); ctx.scale(sc, sc); ctx.globalAlpha *= clamp(p * 3) * .9;
+  ctx.font = `900 ${size}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const w = ctx.measureText(s).width + 56;
+  ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.setLineDash([26, 5]); ctx.beginPath(); ctx.roundRect(-w / 2, -size * .9, w, size * 1.8, 14); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = col; ctx.fillText(s, 0, 3); ctx.restore(); }
+function board(x, y, w, h, seed = 1) { // a cork board in a kraft frame
+  piece(() => torn(x - 22, y - 22, w + 44, h + 44, seed, 3), '#8a5d34', 1.6);
+  piece(() => torn(x, y, w, h, seed + 7, 2.5), C.cork, 0);
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  for (let i = 0; i < 260; i++) { ctx.fillStyle = rnd(seed + i) < .5 ? 'rgba(90,55,25,.28)' : 'rgba(255,235,200,.22)'; ctx.beginPath(); ctx.arc(x + rnd(seed * 3 + i * 1.3) * w, y + rnd(seed * 5 + i * 2.7) * h, 1.5 + rnd(i * 4.4) * 3, 0, 7); ctx.fill(); }
+  ctx.restore(); }
+// a paper slip: o = { rot, seed, col, size, pin: colour, tape: true, mark: '✓' | '✗', markCol, font }
+function slip(x, y, w, h, lines, o = {}) { ctx.save(); ctx.translate(x, y); ctx.rotate((o.rot || 0) + jit(60 + (o.seed || 0), .006));
+  piece(() => torn(-w / 2, -h / 2, w, h, o.seed || 3, 2.5, 12), o.col || C.cream, o.sh ?? 1);
+  const sz = o.size || 30; ctx.fillStyle = o.ink || C.ink; ctx.font = o.font || `700 ${sz}px ${TYPE}`; ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'middle';
+  const lx = o.align === 'center' ? 0 : -w / 2 + 26; lines.forEach((l, i) => ctx.fillText(l, lx, (i - (lines.length - 1) / 2) * sz * 1.3 + 2));
+  if (o.mark) { ctx.font = `900 ${sz * 1.6}px ${SANS}`; ctx.textAlign = 'center'; ctx.fillStyle = o.markCol || (o.mark === '✓' ? C.green : C.red); ctx.fillText(o.mark, w / 2 - sz * 1.0, 2); }
+  if (o.pin) pin(0, -h / 2 + 18, o.pin, 13);
+  if (o.tape) { tape(-w / 2 + 20, -h / 2 + 4, 80, -.5); tape(w / 2 - 20, -h / 2 + 4, 80, .5); }
+  ctx.restore(); }
+function scissors(x, y, size, open, ang = 0) { // paper scissors, pivot at (x, y), blades pointing along +x
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(size / 100, size / 100);
+  [-1, 1].forEach(sd => { ctx.save(); ctx.rotate(sd * open * .5);
+    piece(() => { ctx.beginPath(); ctx.moveTo(-8, -9 * sd); ctx.lineTo(118, -2 * sd); ctx.lineTo(118, 0); ctx.lineTo(-8, 7 * sd); ctx.closePath(); }, C.steel, .5);
+    piece(() => { ctx.beginPath(); ctx.ellipse(-52, 22 * sd, 28, 20, 0, 0, 7); ctx.ellipse(-52, 22 * sd, 15, 10, 0, 0, 7); ctx.moveTo(-26, 12 * sd); ctx.lineTo(-6, 3 * sd); ctx.lineTo(-6, 10 * sd); ctx.lineTo(-30, 22 * sd); }, C.red, .5, false, 'evenodd');
+    ctx.restore(); });
+  ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(0, 0, 5, 0, 7); ctx.fill(); ctx.restore(); }
+
+/* ---------- Tac, cut from cyan paper ---------- */
+const N = 120, TH = Array.from({ length: N }, (_, k) => -Math.PI / 2 + k / N * 2 * Math.PI);
+const superE = (a, b, n) => TH.map(th => { const c = Math.cos(th), s = Math.sin(th); return [a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), b * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]; });
+const BODYP = superE(.5, .44, 3.4);
+const cutPts = (pts, seed, amt = .012) => { ctx.beginPath(); pts.forEach(([x, y], k) => { const f = 1 + (rnd(seed + Math.floor(k / 3) * 3.1 + (FQ % 3) * .01) - .5) * amt; k ? ctx.lineTo(x * f, y * f) : ctx.moveTo(x * f, y * f); }); ctx.closePath(); };
+function limb(a, b, c, d, col, w = .09, seed = 1) { const L = Math.hypot(c - a, d - b); ctx.save(); ctx.translate(a, b); ctx.rotate(Math.atan2(d - b, c - a));
+  piece(() => torn(0, -w / 2, L, w, seed, .008, .05), col, 1); ctx.restore(); }
+// o = { a, rot, sx, sy, lx, ly, happy, squint, blink, step, ant, arms: [[x0,y0,x1,y1],…], belt, cap, palm, thumbs, prop, ph }
+function tac(x, y, s, o = {}) {
+  if (s < 1) return; const ph = o.ph || 0, sh = Math.max(.8, s / 140);
+  ctx.save(); ctx.translate(x + jit(1 + ph, 3), y + jit(2 + ph, 3)); ctx.globalAlpha *= (o.a ?? 1);
+  ctx.fillStyle = 'rgba(72,46,20,.2)'; ctx.beginPath(); ctx.ellipse(s * .05, s * .63, s * .44, s * .055, 0, 0, 7); ctx.fill();
+  ctx.rotate((o.rot || 0) + jit(3 + ph, .02)); ctx.scale(s * (o.sx || 1), s * (o.sy || 1));
+  const st = o.step || 0;
+  piece(() => { ctx.beginPath(); ctx.roundRect(-.29, .34 - Math.max(0, Math.sin(st)) * .07, .17, .24, .06); }, C.cyanD, sh * .7);
+  piece(() => { ctx.beginPath(); ctx.roundRect(.12, .34 - Math.max(0, -Math.sin(st)) * .07, .17, .24, .06); }, C.cyanD, sh * .7);
+  const ant = o.ant || 0; limb(0, -.4, ant, -.6, C.cyanD, .045, 7 + ph);
+  piece(() => cutCircle(ant, -.64, .08, 11 + ph, .006, 12), C.orange, sh * .6);
+  const arms = o.arms ? o.arms.slice() : [];
+  if (o.thumbs) arms.push([.46, .05, .72, -.18]); if (o.palm) arms.push([.42, .05, .16, -.08]);
+  arms.forEach(([a, b, c, d], k) => limb(a, b, c, d, C.cyanD, .09, 20 + k + ph));
+  piece(() => cutPts(BODYP, 31 + ph), C.cyan, sh);
+  piece(() => { ctx.beginPath(); ctx.ellipse(-.22, -.27, .15, .06, -.5, 0, 7); }, C.cyanL, 0);
+  if (o.belt) piece(() => torn(-.5, .2, 1, .08, 41 + ph, .008, .06), C.ink, .5);
+  if (o.cap) { piece(() => { ctx.beginPath(); ctx.ellipse(0, -.4, .36, .13, 0, Math.PI, 0); ctx.closePath(); }, C.red, sh * .6); piece(() => torn(-.06, -.36, .56, .06, 43, .006, .06), C.red, sh * .5); }
+  const ey = -.04, er = .25;
+  if (o.happy) { ctx.strokeStyle = C.ink; ctx.lineWidth = .06; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(0, ey + .07, .15, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); }
+  else {
+    piece(() => cutCircle(0, ey, er + .035, 51 + ph, .005, 22), C.orange, sh * .4);
+    piece(() => cutCircle(0, ey, er - .035, 53 + ph, .004, 22), C.cream, 0);
+    const lx = clamp(o.lx || 0, -1, 1) * .09, ly = clamp(o.ly || 0, -1, 1) * .08;
+    piece(() => cutCircle(lx, ey + ly, .105, 55 + ph, .004, 14), C.ink, 0);
+    ctx.fillStyle = C.cream; ctx.beginPath(); ctx.arc(lx - .035, ey + ly - .04, .03, 0, 7); ctx.fill();
+    const lid = Math.max(o.squint ? .55 : 0, o.blink || 0);
+    if (lid > 0) { ctx.save(); ctx.beginPath(); ctx.arc(0, ey, er - .03, 0, 7); ctx.clip(); piece(() => torn(-.3, ey - er - .02, .6, (er * 2) * lid * .62 + .02, 57, .005, .05), C.cyan, .4); ctx.restore(); }
+  }
+  if (o.palm) piece(() => cutCircle(.14, -.1, .085, 61, .006, 10), C.cyanD, .5);
+  if (o.thumbs) { piece(() => cutCircle(.74, -.2, .08, 63, .006, 10), C.cyanD, .5); piece(() => torn(.72, -.36, .05, .14, 65, .004, .04), C.cyanD, .3); }
+  tape(.33, -.38, .3, .65, .085, .006, .03);
+  if (o.prop) o.prop();
+  ctx.restore();
+}
+/* ---------- Chat, cut from lilac paper ---------- */
+const BUB = (() => { const p = superE(.56, .42, 3); return p.map(([x, y], k) => { const th = TH[k], w = Math.exp(-Math.pow(th - 2.05, 2) / (2 * .06 * .06)); return [x * (1 + .45 * w) - w * .12, y * (1 + .55 * w)]; }); })();
+function chat(x, y, s, o = {}) {
+  if (s < 1) return; const ph = (o.ph || 0) + 100, sh = Math.max(.8, s / 140);
+  ctx.save(); ctx.translate(x + jit(1 + ph, 3), y + jit(2 + ph, 3)); ctx.globalAlpha *= (o.a ?? 1);
+  ctx.fillStyle = 'rgba(72,46,20,.2)'; ctx.beginPath(); ctx.ellipse(s * .05, s * .6, s * .44, s * .055, 0, 0, 7); ctx.fill();
+  ctx.rotate((o.rot || 0) + jit(3 + ph, .02)); ctx.scale(s * (o.sx || 1), s * (o.sy || 1));
+  piece(() => { ctx.beginPath(); ctx.roundRect(-.26, .38, .15, .18, .06); }, C.lilacD, sh * .7);
+  piece(() => { ctx.beginPath(); ctx.roundRect(.11, .38, .15, .18, .06); }, C.lilacD, sh * .7);
+  (o.arms || []).forEach(([a, b, c, d], k) => limb(a, b, c, d, C.lilacD, .085, 70 + k));
+  piece(() => cutPts(BUB, 81 + ph), C.lilac, sh);
+  piece(() => { ctx.beginPath(); ctx.ellipse(-.25, -.24, .15, .06, -.4, 0, 7); }, '#d6c9fb', 0);
+  const lx = clamp(o.lx || 0, -1, 1) * .05, ly = clamp(o.ly || 0, -1, 1) * .04;
+  [-.17, .17].forEach((ex, j) => { if (o.happy) { ctx.strokeStyle = C.ink; ctx.lineWidth = .05; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(ex, -.04, .07, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+    else { piece(() => cutCircle(ex, -.06, .1, 91 + j, .004, 12), C.cream, 0); piece(() => cutCircle(ex + lx, -.06 + ly, .05, 95 + j, .003, 10), C.ink, 0); } });
+  ctx.strokeStyle = C.ink; ctx.lineWidth = .045; ctx.lineCap = 'round'; ctx.beginPath();
+  if (o.oops) { ctx.moveTo(-.1, .16); ctx.quadraticCurveTo(0, .1, .1, .16); } else ctx.arc(0, .08, .1, .2 * Math.PI, .8 * Math.PI); ctx.stroke();
+  tape(-.4, -.32, .28, -.6, .08, .006, .03);
+  ctx.restore();
+}
+
+/* ---------- SFX cues + music sections (read by the mixer; page time) ---------- */
+const CUES = []; const cue = (t, s, g = 1, r = 1, off = 0, len = 0) => CUES.push([+t.toFixed(3), s, g, r, off, len]);
+cue(.05, 'pages', .5); for (let k = 0; k < 9; k++) cue(.2 + k * .04 * 1.5, 'tick', .3, 1 + k * .03);
+cue(S(1) + .1, 'swish', .45); cue(S(1) + .5, 'stamp', .7); cue(S(1) + 1.0, 'pop', .5);
+cue(S(2) + .2, 'click', .5); cue(S(3) + .1, 'boing', .4); cue(PAGE_END - 1.0, 'ding', .35, .75);
+const MUSIC = [[0, 'intro'], [S(1), 'work'], [S(3), 'outro'], [PAGE_END, 'end']];
+const LOOK = 'papercut'; // music + sound palette in tools/sound.py
+Object.assign(window, { CUES, MUSIC, DUR, WARP, CAPS, LOOK });
+
+/* ---------- demo scene ---------- */
+const slideIn = (t, t0, dist = 800) => (1 - back((t - t0) / .4)) * dist;
+function sceneDemo(t) {
+  ransom(['paper', 'cut'], 290, 124, 10, t + 1);
+  const by = 610 + slideIn(t, S(1) - .1, -1300);
+  board(150, by, 780, 420, 3);
+  [['spec.md', 0], ['test_1 ✓', 1], ['test_2 ✗', 2]].forEach(([s, k]) => { if (t < S(1) + .3 + k * .25) return;
+    slip(290 + k * 250, by + 150 + (k % 2) * 90, 210, 96, [s.replace(/ [✓✗]/, '')], { rot: (rnd(k) - .5) * .12, seed: 5 + k, pin: [C.red, C.teal, C.mustard][k], mark: s.slice(-1) === '✓' ? '✓' : s.slice(-1) === '✗' ? '✗' : '', size: 28 }); });
+  if (t > S(1) + 1.1) yarn(sag(290, by + 120, 790, by + 210, 50), C.red, 9);
+  stamp('PAPER', 790, by + 380, -.15, (t - S(1) - .5) / .5, 44);
+  dymo('LOOK · PAPER-CUT', 700, 1100, 30, -.02, clamp((t - S(2)) / .2));
+  const open = t > S(2) && t < S(3) ? .5 + Math.sin(FQ * 1.6) * .4 : .3;
+  tac(330, 1240, 240, { lx: .6, ly: -.4, happy: t > S(3) + .3, arms: [[.45, .05, .7, -.05]], prop: () => { ctx.save(); ctx.translate(.78, -.08); ctx.scale(1 / 240, 1 / 240); scissors(0, 0, 150, open, -.3); ctx.restore(); } });
+  chat(790, 1250 + slideIn(t, S(3) - .2, 900), 220, { lx: -.7, ly: -.3, happy: t > S(3) + .6 });
+}
+
+/* ---------- captions (tacdel-shorts style) ---------- */
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.letterSpacing = '0px';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+
+/* ---------- frame ---------- */
+function draw(traw) {
+  const tc = warp(traw), t = Math.floor(tc * 12 + 1e-6) / 12; FQ = Math.round(t * 12); // motion on twos; captions keep full timing
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([]); ctx.shadowColor = 'transparent';
+  ctx.drawImage(BG, 0, 0);
+  sceneDemo(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  const f = clamp((t - (PAGE_END - .35)) / .35); if (f > 0) { ctx.globalAlpha = f; ctx.fillStyle = '#1a1612'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  captions(tc);
+  if (PENDING) { ctx.save(); ctx.font = `700 26px ${SANS}`; ctx.fillStyle = 'rgba(8,8,8,.7)'; ctx.beginPath(); ctx.roundRect(24, 150, 640, 44, 22); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText('REVIEW COPY · voice pending · timing estimated', 44, 173); ctx.restore(); }
+}
+
+/* ---------- player (works with tools/grab.cjs, tools/still.cjs and render.cjs) ---------- */
+let T = Q.has('t') ? clamp(+Q.get('t'), 0, DUR - .001) : 0, playing = !Q.has('t'), prev = null;
+function frame(now) { if (playing && prev !== null) T = (T + Math.min(.1, (now - prev) / 1000)) % DUR; prev = now; draw(T); requestAnimationFrame(frame); }
+addEventListener('keydown', e => { if (e.key === ' ') { playing = !playing; e.preventDefault(); } else if (e.key.toLowerCase() === 'r') { T = 0; playing = true; } });
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { T = s; playing = false; draw(T); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

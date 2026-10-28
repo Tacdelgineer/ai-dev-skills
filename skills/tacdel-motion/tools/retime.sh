@@ -8,6 +8,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; SK="$HERE/../../tacdel-shorts/tools"
 FIN="${PAGE%.html}_final.html"; cp "$PAGE" "$FIN"
 python3 "$SK/timing.py" warp "$WJ" "$CH" "$FIN" --write
 DUR=$(grep -oP '^const DUR = \K[\d.]+' "$FIN")
-python3 "$HERE/sound.py" "$FIN" "${OUT%.mp4}.m4a" "$V"
+uv run "$HERE/sound.py" "$FIN" "${OUT%.mp4}.m4a" "$V"
 node "$SK/render.cjs" "$FIN" "$OUT" "$DUR" "${OUT%.mp4}.m4a"
 echo "done: $OUT ($DUR s)"

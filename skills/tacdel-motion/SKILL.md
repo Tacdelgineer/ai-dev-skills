@@ -1,6 +1,6 @@
 ---
 name: tacdel-motion
-description: Make a finished tacdel animated Short (50–60 s, 1080x1920) end to end from just an idea. You write a story script with soul starring Tac, the one-eyed robot, then generate Alireza's ElevenLabs voice and use its word timings. The animation is drawn in code in one of three looks (Riso 2.0, Living Simulation, Tiny AI Factory), with matched sound effects, an original code-composed score and burned-in captions. Delivers the MP4 plus titles, description and thumbnail. Use whenever Alireza gives a topic or idea for an animated explainer or story Short, or asks for "another one like the three episodes". Use tacdel-shorts instead for quick first-person trend/test Shorts.
+description: Make a finished tacdel animated Short (50–60 s, 1080x1920) end to end from just an idea. You write a story script with soul starring Tac, the one-eyed robot, then generate Alireza's ElevenLabs voice and use its word timings. The animation is drawn in code in one of five looks (Riso 2.0, Living Simulation, Tiny AI Factory, Terminal, Paper-cut), with matched sound effects, an original code-composed score and burned-in captions. Delivers the MP4 plus titles, description and thumbnail. Use whenever Alireza gives a topic or idea for an animated explainer or story Short, or asks for "another one like the three episodes". Use tacdel-shorts instead for quick first-person trend/test Shorts.
 ---
 
 # tacdel motion
@@ -14,7 +14,9 @@ The files live in `github.com/Tacdelgineer/ai-dev-skills` under `skills/tacdel-m
 | `looks/riso2.html` | Finished Ep 1 "100 AI agents". Cream riso paper, cyan + orange halftone, morphing shapes, a crowd of 100 Tacs, ink wipes. Good for crowds, chaos and systems. |
 | `looks/living.html` | Finished Ep 2 "Agent vs chatbot". Navy glow, bokeh, soft cards, a split screen that focuses then merges, Chat the speech-bubble creature. Good for comparisons and UI-like demos. |
 | `looks/factory.html` | Finished Ep 3 "Why AI forgets". Pastel isometric factory outside and a workbench inside, with a dive through the door. Good for processes, pipelines and memory. |
-| `looks/*.script.txt`, `*.chunks.txt` | The script and caption chunks each example was built from. |
+| `looks/terminal.html` | Short demo of the look (no episode yet). Green phosphor on dark glass with bloom, scanlines, a rolling refresh band and a bezel; Tac and Chat as glowing outlines. Good for code, agents, logs and hacking stories. Music palette `terminal`. |
+| `looks/papercut.html` | Short demo of the look (no episode yet). Cut and torn paper with grain and drop shadows, tape, pins, yarn on a cork board, ransom letters, dymo labels and stamps, moving on twos. Good for evidence boards, investigations and step-by-step stories. Music palette `papercut`. |
+| `looks/*.script.txt`, `*.chunks.txt` | The script and caption chunks each finished episode was built from. |
 | `tools/sound.py` | Mixer. It plays sound effects at the page's `CUES`, writes an original score from the page's `MUSIC` sections (one palette per look), ducks the music under the voice and outputs a loudness-normalised AAC. |
 | `tools/sfx/*.mp3` | Sound-effect library made with ElevenLabs Sound Effects v2: stamp, stampede, paint, printer, whistle, pages, scratch, tada, drone, press, sizzle, conveyor, register, typing, drawer, buzzer. |
 | `tools/voice.py` | Voice without the connector: 2 takes from the ElevenLabs API with word timings, then `pick_take.py`. Reads `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` from the environment, or from `~/.tacdel.env` when they're not set. |
@@ -25,7 +27,7 @@ The files live in `github.com/Tacdelgineer/ai-dev-skills` under `skills/tacdel-m
 | `tools/retime.sh` | Re-times a finished page to a different take, then remixes and renders. |
 | `references/script-soul.md` | How the script must sound, with a before/after example. **Read it before writing.** |
 
-Needs Node with `playwright` (`npm install` at the repo root, then `npx playwright install chromium`), Python 3 with numpy and scipy, and `ffmpeg`.
+Needs Node with `playwright` (`npm install` at the repo root, then `npx playwright install chromium`), Python 3, [uv](https://docs.astral.sh/uv/) for `sound.py` (it declares numpy and scipy inline, pinned by `tools/sound.py.lock`), and `ffmpeg`.
 
 In Claude Code on a local machine:
 
@@ -57,7 +59,7 @@ To check they took effect, read them back with `GET /v1/voices/{voice_id}/settin
    - Every physical action gets a cue (`cue(t, name, gain, rate, offset, length)`).
    - `MUSIC` is `[[t, section], …, [PAGE_END, 'end']]`, using the section names of that look in `tools/sound.py` (add sections there if needed). Cut the music on the gut-punch.
 7. **Check.** Run `node tools/grab.cjs page.html sheet.png 300 6 <12–18 times>` and look at it. Fix overlaps, clipped text and empty stretches. Check the transitions too. Do at most two more rounds.
-8. **Sound.** Run `python3 tools/sound.py page.html mix.m4a voice.mp3` (it ends at -14 LUFS).
+8. **Sound.** Run `uv run tools/sound.py page.html mix.m4a voice.mp3` (it ends at -14 LUFS). uv installs numpy and scipy on the first run; no venv or pip needed.
    - You only need a new ElevenLabs effect when the library and the synth names can't cover an action. Use `creative_generate_in_flow`, `node_type: sfx`, `eleven_text_to_sound_v2` (about 17 credits per take). Poll with one session id per effect, save it as `tools/sfx/<name>.mp3`, and add it to the repo.
    - Synth names: pop, tick, click, key, whoosh, swish, wipe, thunk, ding, coin, sparkle, chime, blip, wink, riser, freeze, roll, splat, boing, whirr, beep, ping, radar, alarm, steam, hum, lock, spin.
 9. **Render.** Run `node ../tacdel-shorts/tools/render.cjs page.html out.mp4 <DUR> mix.m4a`. Then:
