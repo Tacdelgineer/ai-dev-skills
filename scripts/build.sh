@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Check every skill's frontmatter, then zip skills into dist/ for upload to claude.ai.
+#   scripts/build.sh               zip every skill
+#   scripts/build.sh tacdel-video  zip only the named skills
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+python3 scripts/check_skills.py
+
+mkdir -p dist
+skills=("$@")
+[ ${#skills[@]} -eq 0 ] && skills=($(ls skills))
+cd skills
+for s in "${skills[@]}"; do
+  [ -f "$s/SKILL.md" ] || { echo "no skill named $s" >&2; exit 1; }
+  rm -f "../dist/$s.zip"
+  zip -qr -X "../dist/$s.zip" "$s" -x '*/__pycache__/*' '*/node_modules/*'
+  echo "built dist/$s.zip ($(stat -c %s "../dist/$s.zip") bytes)"
+done
