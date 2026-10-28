@@ -1,7 +1,7 @@
 #!/bin/bash
 # Re-time a finished page to another voice take, remix, render.
 #   tools/retime.sh page.html voice.mp3 words.json chunks.txt out.mp4
-# words.json = Scribe transcript of that exact take. Writes page_final.html next to the page.
+# words.json = word timings of that exact take (voice.py, or a Scribe transcript). Writes page_final.html next to the page.
 set -euo pipefail
 PAGE=$1; V=$2; WJ=$3; CH=$4; OUT=$5
 HERE="$(cd "$(dirname "$0")" && pwd)"; SK="$HERE/../../tacdel-shorts/tools"

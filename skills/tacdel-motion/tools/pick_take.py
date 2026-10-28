@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Pick the best voice take without listening to it.
+"""Check a voice take without listening to it (or pick the best of several, if you were asked for more).
 
-  python3 pick_take.py script.txt take1.words.json take2.words.json ...
+  python3 pick_take.py script.txt take1.words.json [take2.words.json ...]
 
-Each words.json is the ElevenLabs Scribe transcript of one take (creative_transcribe_audio ->
-words_download_url). Scores every take on: how closely the transcript matches the script (a skipped,
+Each words.json holds the word timings of one take: voice.py's TTS alignment, or an ElevenLabs Scribe
+transcript (creative_transcribe_audio -> words_download_url). Scores every take on: how closely the transcript matches the script (a skipped,
 doubled or garbled word costs points), the speaking pace, and the longest pause (a long dead gap usually
-means a glitch). Prints a table and the winner. Pace is a rough check on the voice settings: on full scripts at
-speed 1.0 the Alireza voice measured 154-168 words per minute. A one-sentence test has no pauses and runs
-about 200 wpm, so the warning means nothing there. On a full script, a take far faster than that means the
-stored voice settings should be read back before shipping.
+means a glitch). Prints a table and the winner. Pace is a rough check on the voice settings: on full Short scripts the
+final eleven_v4 settings (FINAL_VOICE.md) measured 148-168 words per minute. A one-sentence test has no pauses
+and runs about 200 wpm, so the warning means nothing there. On a full script, a take far faster than that
+means the request didn't carry FINAL_VOICE.md's settings.
 """
 import difflib, json, re, sys
 
@@ -43,8 +43,8 @@ def main():
         for tag, a, b in bad[:6]: print(f"{'':>36}{tag}: script '{a}' -> heard '{b}'")
     best = rows[0]
     print(f"\nbest: {best[1]}")
-    if best[3] > 175: print('WARNING: pace is above the stored speed — on a full script, read the stored voice settings back. One-sentence tests run fast; ignore it there.')
-    if best[2] < .9: print('WARNING: even the best take drifts from the script; check the flagged words before using it.')
+    if best[3] > 175: print('WARNING: pace is above the final v4 settings — on a full script, check the request sent FINAL_VOICE.md\'s settings. One-sentence tests run fast; ignore it there.')
+    if best[2] < .9: print('WARNING: the take drifts from the script; check the flagged words before using it.')
 
 if __name__ == '__main__':
     main()

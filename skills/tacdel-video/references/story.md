@@ -156,8 +156,8 @@ rules above decide the order the ideas arrive in.
 
 ## Timing
 
-- ElevenLabs reads about 150 words a minute with `eleven_multilingual_v2`, and about 170–175
-  with the channel's current `eleven_v4` settings (`automated.md`). A 9–10 minute video is
+- ElevenLabs reads about 170–175 words a minute with the channel's `eleven_v4` settings
+  (`FINAL_VOICE.md`; ~150–170 on a Short, so a ~45 s Short is ~110 words). A 9–10 minute video is
   ~1,400–1,500 spoken words.
 - Manual mode: target words ≈ (footage seconds + stat cards + planned recordings) × 2.5.
 - Each clip carries 1–3 sentences; a 12-second clip holds about 25–30 words.
@@ -182,8 +182,10 @@ rules above decide the order the ideas arrive in.
 - Use "..." for pauses and blank lines between paragraphs.
 - **No square brackets or stage directions** — some models treat [tags] as instructions or
   read them aloud.
-- Keep stability around the middle. Lower is more emotional but less consistent.
-- Do 2–3 takes per chapter, and regenerate single lines instead of whole chapters.
+- Voice settings are fixed (`FINAL_VOICE.md` at the repo root): `eleven_v4` only, never v2, the same
+  stability, similarity and speed every time. Don't tune them per video.
+- One take per chapter (one per Short). Re-voice only a take with a wrong or swallowed word, and
+  then only that chapter.
 - A paid plan is needed for monetized videos (the free plan is non-commercial and needs
   attribution).
 - Name the files by chapter: `01_cold_open.mp3`, `02_welcome.mp3`, and so on.

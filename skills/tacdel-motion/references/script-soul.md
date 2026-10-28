@@ -33,7 +33,7 @@ a person who finds it funny and a little bit moving, to one friend.
 10. **The read-aloud test.** Read every line in Alireza's voice. If a line sounds like a corporate explainer,
     rewrite it. If it sounds like something he'd say across a dinner table, keep it.
 
-Length: 130–150 words for 50–60 s at speed 0.93. Write numbers as words.
+Length: about 110 words (100–120) for ~45 s on eleven_v4 at speed 0.93 (`FINAL_VOICE.md`). Write numbers as words.
 
 ## Before and after (Ep 1)
 

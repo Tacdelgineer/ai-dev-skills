@@ -1,6 +1,6 @@
 ---
 name: tacdel-shorts
-description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~100-word voiceover, voice it in Alireza's ElevenLabs voice, animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions. Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
+description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~110-word voiceover, voice it in one take of Alireza's ElevenLabs voice (eleven_v4), animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions, plus its post text (titles, thumbnails and extras only when asked). Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
 ---
 
 # tacdel Shorts
@@ -13,6 +13,7 @@ attach and clone the repo first.
 | Folder | What is in it |
 |---|---|
 | `styles/` | One finished Short per style (`riso`, `papercut`, `kinetic`, `crt`). Each is a single HTML file with a matching `.chunks.txt`. Copy the closest one to start. |
+| `../tacdel-motion/tools/voice.py` | The voice: one `eleven_v4` take with the final settings and word timings, checked by `pick_take.py`. |
 | `tools/timing.py` | Turns ElevenLabs word timings into captions, or re-times a finished Short to a new take. |
 | `tools/sheet.cjs` | Makes one contact sheet of chosen moments, for checking layout. |
 | `tools/render.cjs` | Renders a frame-exact 30 fps MP4, with the voice muxed in. |
@@ -27,25 +28,27 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
    baseline?) · link · tag (third-party measured / vendor-reported / unverified). If a source gives no
    latency or cost number, write "not given" and never infer one. Check that the test can run on the
    DGX Spark (ARM64, 128 GB unified memory).
-2. **Script.** Write 95–110 words in the first person, in short sentences. The result or surprise comes
+2. **Script.** Write about 110 words (100–120, ≈45 s at the v4 pace) in the first person, in short sentences. The result or surprise comes
    first. The last line is the payoff, the takeaway, or a short question to the viewer about this Short;
    never a tease of another post ("follow for part 2", "results next"). Never claim a result he doesn't have.
    Write numbers as words ("sixty-one point eight") and write no audio tags. Use
    `<break time="0.5s" />` at most twice. Then write `chunks.txt`: one caption chunk per line in the
    spoken words, with ` || shown text` added where the screen should show digits.
-3. **Voice.** Voice "Alireza" (look up its id with `creative_list_voices`). Model: Multilingual v2.
-   Settings: speed 1.0, stability 69%, similarity 78%, style exaggeration 24%.
-   - The Claude ElevenLabs connector can set only the model and the voice, not those sliders. So
-     Alireza makes the take on the ElevenLabs Text to Speech page with these settings and attaches the
-     MP3.
-   - Otherwise use the connector with the voice's saved defaults: `creative_create_flow`, then
-     `creative_generate_speech`. Poll ONCE after about 20 s; the replies are long. Pin the take with
-     `creative_add_flow_asset_node` and label it "Chosen take (synced to video)".
-4. **Word timings.** Get the take onto a flow: an attached file goes through `creative_create_asset_upload`,
-   a PUT of the bytes, then `creative_finalize_asset_upload`. Run `creative_transcribe_audio` on it
-   (free). Download `words_download_url` with curl, plus the take's `content_url` as `voice.mp3`. Read
-   neither into chat. Then run `python3 tools/timing.py caps words.json chunks.txt`, which prints `CAPS`.
-   Each scene starts at the start of its chunk.
+3. **Voice.** One take of "Alireza" on `eleven_v4` with the settings in `FINAL_VOICE.md` at the repo root
+   (also inside this skill's zip): `{"stability": 0.69, "similarity_boost": 0.78, "speed": 0.93}`, sent with
+   every request as written, no style, no speaker boost. Never Multilingual v2 or another v2 model.
+   - With an API key (Claude Code): `python3 ../tacdel-motion/tools/voice.py script.txt <short dir>` makes the
+     take, writes `voice.mp3` + `words.json` from the TTS alignment and checks it with `pick_take.py`. Re-voice
+     only for a wrong, swallowed or garbled word, never for taste.
+   - Without one: Alireza makes the one take on the ElevenLabs Text to Speech page with Eleven v4 and these
+     settings and attaches the MP3. Don't voice through the connector's `creative_generate_speech`: it can't
+     pass sliders and would use the voice's stored settings, which are left over from v2.
+4. **Word timings.** `voice.py` already wrote `words.json`. For an attached take: get it onto a flow
+   (`creative_create_asset_upload`, a PUT of the bytes, then `creative_finalize_asset_upload`), run
+   `creative_transcribe_audio` on it (free), and download `words_download_url` with curl, plus the take's
+   `content_url` as `voice.mp3`. Read neither into chat. Then run
+   `python3 tools/timing.py caps words.json chunks.txt`, which prints `CAPS`. Each scene starts at the start
+   of its chunk.
 5. **Animate.** Copy the style file, then replace `CAPS`, `SCENES`, `DUR` and the scene functions. Keep
    the palette and helpers, the captions function and the player block. Key each animation to the
    start time of its cue word. Layout:
@@ -58,8 +61,10 @@ The tools need Node with `playwright`, Python 3 and `ffmpeg`.
 7. **Render.** Run `node tools/render.cjs page.html out.mp4 <DUR> voice.mp3`. To leave the voice out, put
    `-` where the MP3 goes. For a version without captions, add `nocaps` as a fifth argument. A 45 s Short
    takes about 10 minutes on 2 CPUs. Run at most 2 renders at once, and render only after the sheet is right.
-8. **Deliver.** Send the MP4 and the HTML. Notes: the title, the voiceover as recorded, the fact table with
-   links, a post caption of 70 words or fewer with the same rounding as the voiceover, and 3 hashtags.
+8. **Deliver.** `NN_name.mp4` plus `NN_name.txt`: a post caption of 70 words or fewer with the same
+   rounding as the voiceover, how it was tested, and 3 hashtags. Put the voiceover as recorded in your
+   message. Nothing else unless asked: title options, thumbnails, a long description with links and new
+   sound effects are extras. Keep the fact table in the Short's folder as a working file.
 
 **Re-time a finished Short to a new take** (no scene edits): run
 `python3 tools/timing.py warp words.json chunks.txt page.html --write`, then render again.

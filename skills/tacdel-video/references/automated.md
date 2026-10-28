@@ -39,6 +39,9 @@ else: decide, write it down in STATUS.md, keep going.
 
 ## Voice (the channel's final settings, picked 2026-10-26)
 
+Source of truth: `FINAL_VOICE.md` at the repo root (copied into the skill zip). Never `eleven_multilingual_v2`
+or another v2 model; always send `voice_settings` (the ones stored on the voice are left over from v2).
+
 | Setting | Value |
 |---|---|
 | Endpoint | `POST /v1/text-to-speech/{voice_id}/with-timestamps?output_format=mp3_44100_192` (audio + character timings) |

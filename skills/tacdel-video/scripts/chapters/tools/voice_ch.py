@@ -6,7 +6,7 @@
 
 Text = the chapter's Voice block in the script (SCRIPT env var, default video.json "script"), ⟦…⟧ markers removed.
 Both script layouts work: "## NN. Title / **Voice** / … / **Shots**" and "NN · Title / Voice / … / Shots".
-Settings: references/automated.md "Voice" (eleven_v4 takes no style or speaker boost). Writes voice/raw/NN.mp3,
+Settings: FINAL_VOICE.md at the repo root (MODEL and SETTINGS below must match; eleven_v4 takes no style or speaker boost). Writes voice/raw/NN.mp3,
 voice/raw/NN.words.json, voice/text/NN.txt. Creds via tacdel-motion voice.py (env or ~/.tacdel.env).
 Prints a short summary only: no keys, ids or audio. Every call spends credits: voice a chapter again only when its
 take fails the check (wrong word, swallowed word, a line changed by the fact check).

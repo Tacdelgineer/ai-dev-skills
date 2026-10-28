@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Voice takes straight from the ElevenLabs API, with word timings, then pick the best one.
+"""One voice take straight from the ElevenLabs API, with word timings, then check it.
 
   python3 voice.py script.txt [out_dir]
 
 ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID come from the environment, or from ~/.tacdel.env (KEY=value
 lines, outside any repo) when they are not set there.
 
-Calls text-to-speech "with-timestamps" on eleven_multilingual_v2 twice. It sends no voice_settings, so
-the voice's stored settings apply (see "One-time setup" in SKILL.md). Writes take1.mp3/take2.mp3 and
-take1.words.json/take2.words.json in the shape timing.py and pick_take.py read, runs pick_take.py
-(full report in pick.txt) and copies the winner to voice.mp3 + words.json. Prints a short summary
-only: no audio, base64, keys, voice ids or URLs. Costs about 1 credit per character per take.
+Calls text-to-speech "with-timestamps" once on eleven_v4 with the channel's final settings (FINAL_VOICE.md at
+the repo root; MODEL and SETTINGS below must match it). The settings are always sent: the ones stored on the
+voice are left over from v2. Writes take1.mp3 + take1.words.json in the shape timing.py and pick_take.py read,
+runs pick_take.py as a check (full report in pick.txt) and copies the take to voice.mp3 + words.json. Prints
+a short summary only: no audio, base64, keys, voice ids or URLs. Costs about 0.44 credits per character.
 """
 import base64, json, os, re, shutil, subprocess, sys, urllib.error, urllib.request
 
-TAKES = 2
-MODEL = 'eleven_multilingual_v2'
+TAKES = 1
+MODEL = 'eleven_v4'   # FINAL_VOICE.md: v4 only, never v2; eleven_v4 takes no style or speaker boost
+SETTINGS = {'stability': 0.69, 'similarity_boost': 0.78, 'speed': 0.93}
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.expanduser('~/.tacdel.env')
 
@@ -28,8 +29,8 @@ def creds():
     return env['ELEVENLABS_API_KEY'], env['ELEVENLABS_VOICE_ID']
 
 def speak(text, key, voice):
-    req = urllib.request.Request(f'https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps',
-                                 data=json.dumps({'text': text, 'model_id': MODEL}).encode(),
+    req = urllib.request.Request(f'https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps?output_format=mp3_44100_192',
+                                 data=json.dumps({'text': text, 'model_id': MODEL, 'voice_settings': SETTINGS}).encode(),
                                  headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'application/json'})
     try:
         with urllib.request.urlopen(req, timeout=300) as r: return json.load(r)
@@ -64,7 +65,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     text = open(script, encoding='utf-8').read().strip()
     spoken = re.sub(r'<[^>]+>', ' ', text)
-    print(f'{len(spoken.split())} words, {len(text)} chars x {TAKES} takes (~{len(text) * TAKES} credits)')
+    print(f'{len(spoken.split())} words, {len(text)} chars x {TAKES} take(s) (~{round(len(text) * TAKES * .44)} credits)')
     wjs = []
     for n in range(1, TAKES + 1):
         d = speak(text, key, voice)
@@ -77,7 +78,7 @@ def main():
     r = subprocess.run([sys.executable, os.path.join(HERE, 'pick_take.py'), script, *wjs], capture_output=True, text=True)
     report = r.stdout + r.stderr
     open(os.path.join(out, 'pick.txt'), 'w').write(report)
-    # table rows, winner and warnings only; the per-word diffs stay in pick.txt
+    # table row and warnings only; the per-word diffs stay in pick.txt
     for line in report.splitlines():
         if line.strip() and not line.startswith(' ' * 20): print(line)
     best = re.search(r'^best: (.+)$', report, re.M)

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Check every skill's frontmatter, then zip skills into dist/ for upload to claude.ai.
+# The tacdel-* zips also get the repo's FINAL_VOICE.md (the one voice setup) inside the skill folder.
 #   scripts/build.sh               zip every skill
 #   scripts/build.sh tacdel-video  zip only the named skills
 set -euo pipefail
@@ -15,5 +16,9 @@ for s in "${skills[@]}"; do
   [ -f "$s/SKILL.md" ] || { echo "no skill named $s" >&2; exit 1; }
   rm -f "../dist/$s.zip"
   zip -qr -X "../dist/$s.zip" "$s" -x '*/__pycache__/*' '*/node_modules/*'
+  if [[ $s == tacdel-* ]]; then
+    tmp=$(mktemp -d); mkdir "$tmp/$s"; cp ../FINAL_VOICE.md "$tmp/$s/"
+    (cd "$tmp" && zip -q -X "$OLDPWD/../dist/$s.zip" "$s/FINAL_VOICE.md"); rm -r "$tmp"
+  fi
   echo "built dist/$s.zip ($(stat -c %s "../dist/$s.zip") bytes)"
 done

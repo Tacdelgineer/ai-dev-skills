@@ -19,7 +19,7 @@ Each morning send the 5 best items, not more. For each item:
 5. BEATS: 4-6 visual beats as simple objects that move (a receipt unrolling, a dial clicking, a cube that
    won't fit), drawable as flat shapes. No photoreal scenes, no text inside images, no numbers that
    aren't in FACTS.
-6. VOICEOVER: 95-110 words, short sentences, first person, numbers written as words ("sixty-one point
+6. VOICEOVER: about 110 words (100-120, ~45 s), short sentences, first person, numbers written as words ("sixty-one point
    eight"), no audio tags. End on the payoff, the takeaway, or a short question to the viewer about this Short; never tease
    another post ("next time...", "follow for part 2"). Never claim a result I don't have yet.
 7. CAPTION: 70 words max, same rounding as the voiceover, 3 hashtags.
