@@ -326,13 +326,22 @@ STYLES = {
 }
 
 # ---------------------------------------------------------------- page reading + mix
+def node_env():  # every node_modules from this file up to / (the repo root's has playwright), ahead of any NODE_PATH already set
+    mods, d = [], HERE
+    while True:
+        if os.path.isdir(os.path.join(d, 'node_modules')): mods.append(os.path.join(d, 'node_modules'))
+        up = os.path.dirname(d)
+        if up == d: break
+        d = up
+    return dict(os.environ, NODE_PATH=os.pathsep.join(mods + [p for p in os.environ.get('NODE_PATH', '').split(os.pathsep) if p]))
+
 def page_data(page):
     js = r"""
 const { chromium } = require('playwright'); const path = require('path');
 (async () => { const b = await chromium.launch(); const p = await b.newPage(); await p.goto('file://' + path.resolve(process.argv[1]) + '?clean&nocaps');
   await p.waitForTimeout(600); const d = await p.evaluate(() => JSON.stringify({ CUES, MUSIC, DUR, WARP, CAPS, LOOK: window.LOOK || '' })); console.log(d); await b.close(); })();
 """
-    out = subprocess.run(['node', '-e', js, os.path.abspath(page)], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(['node', '-e', js, os.path.abspath(page)], capture_output=True, text=True, check=True, env=node_env()).stdout
     return json.loads(out.strip().splitlines()[-1])
 
 def inv_warp(WARP):
