@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Fail if any skill's SKILL.md has no description or one over claude.ai's 1,024-character limit.
+"""Fail if any skill's SKILL.md has no description, one over claude.ai's 1,024-character limit, or one
+with < or > (claude.ai rejects XML tags in a description).
 
 Standard library only. Reads the YAML frontmatter forms the skills use: a plain or quoted
 one-line value (with indented continuation lines) or a > / | block scalar.
@@ -53,6 +54,9 @@ def main():
             failed = True
         elif len(desc) > LIMIT:
             print(f"FAIL {name}: description is {len(desc)} characters (limit {LIMIT})")
+            failed = True
+        elif "<" in desc or ">" in desc:
+            print(f"FAIL {name}: description contains < or > (claude.ai rejects XML tags); write PROJECT, not <project>")
             failed = True
         else:
             print(f"ok   {name}: {len(desc)} characters")

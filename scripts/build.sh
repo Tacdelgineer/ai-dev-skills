@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Check every skill's frontmatter, then zip skills into dist/ for upload to claude.ai.
+# Check every skill's frontmatter (description present, at most 1,024 characters, no < or >), then zip
+# skills into dist/ for upload to claude.ai.
 # The tacdel-* zips also get the repo's FINAL_VOICE.md (the one voice setup) and WRAP.md (the end-of-video
 # archive step) inside the skill folder.
 #   scripts/build.sh               zip every skill
