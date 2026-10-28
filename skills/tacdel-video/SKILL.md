@@ -1,6 +1,6 @@
 ---
 name: tacdel-video
-description: The tacdel channel's workflow for turning a coding or AI experiment into a faceless YouTube explainer and its Shorts. Manual mode films code-drawn neon risograph rooms for a CapCut edit; automated mode has Claude Code run the experiment, write and fact-check the script, voice it through the ElevenLabs API and render the master and Shorts. Covers YouTube packaging too. Use whenever the user plans, builds visuals for, scripts, narrates, edits or publishes a YouTube video or Short, including "new video", "next video", "new experiment video", "turn this project into a video", story or script rewrites, voiceover or narration scripts, stat cards, B-roll, footage or chapter renders, gameplay overlays, thumbnails, titles, descriptions, chapters, click-through rate, or how to do something in CapCut. In Claude Code, also use it when building rooms or chapter pages, rendering footage, a master or Shorts, stat cards or charts for a video, or publishing the live page.
+description: The tacdel channel's workflow for turning a coding or AI experiment into a faceless YouTube explainer and its Shorts. Manual mode films code-drawn neon risograph rooms for a CapCut edit; automated mode has Claude Code run the experiment, write and fact-check the script, voice it through the ElevenLabs API and render the master and Shorts. Covers YouTube packaging too. Use whenever the user plans, builds visuals for, scripts, narrates, edits or publishes a YouTube video or Short, including "new video", "next video", "new experiment video", "turn this project into a video", story or script rewrites, voiceover or narration scripts, stat cards, B-roll, footage or chapter renders, gameplay overlays, thumbnails, titles, descriptions, chapters, click-through rate, or how to do something in CapCut. In Claude Code, also use it when building rooms or chapter pages, rendering footage, a master or Shorts, stat cards or charts for a video, or publishing the live page. Also use for "wrap <project>".
 ---
 
 # tacdel video pipeline
@@ -22,6 +22,8 @@ Turn an experiment into a ~9–10 minute faceless explainer and its Shorts. Two 
 - Title, thumbnail prompts, description, chapters, CTR, README → `references/packaging.md`
 - Ready-made Claude Code prompts, including the automated kickoff → `templates/claude-code-prompts.md`
 - Manual-mode script format → `templates/script-template.md` (automated: `scripts/chapters/template/SCRIPT.md`)
+- Archiving a finished project (only when the owner says "wrap <project>", never automatically) → `WRAP.md`
+  at the repo root (it ships inside this skill's zip too)
 
 ## Manual pipeline, in order
 

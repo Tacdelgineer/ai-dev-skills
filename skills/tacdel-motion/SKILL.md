@@ -105,6 +105,10 @@ To swap in a different take later, run `tools/retime.sh page.html voice.mp3 word
 - **Credits:** the riso look credits IshaanKalra2103's riso-rooms (MIT) and Kevin Ngo's "a small light, room by room". The music is original, composed in code; no third-party tracks.
 - **This repo is public.** Put no voice ids, flow links, keys or home paths in it.
 
+## Wrap
+
+Only when Alireza says "wrap <project>", never automatically: follow `WRAP.md` at the repo root (it ships inside this skill's zip too) to archive the episode to the PC, verify the hashes, then wipe the scratch.
+
 ## Pitfalls already hit
 
 - In riso, anything drawn with `multiply` can't be lighter than what's under it. Draw paper-coloured text, eyes and highlights with `source-over`.

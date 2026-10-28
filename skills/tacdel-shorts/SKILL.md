@@ -98,3 +98,8 @@ keep the player and captions as they are.
 
 Not covered yet. For 10-minute videos use the `tacdel-video` skill. Once a Shorts style wins, its scenes can
 be laid out at 16:9 for long-form chapters.
+
+## Wrap
+
+Only when Alireza says "wrap <project>", never automatically: follow `WRAP.md` at the repo root (it ships
+inside this skill's zip too) to archive the Short to the PC, verify the hashes, then wipe the scratch.
