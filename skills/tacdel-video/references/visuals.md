@@ -2,6 +2,8 @@
 
 Read this in Claude Code when building rooms, rendering footage, stat cards or charts, or
 publishing the live page. Chat Claude reads it when planning which rooms a video needs.
+"Contract: what's on screen while the voice talks" applies to both modes; automated mode's
+chapter pages are in `scripts/chapters/README.md`.
 
 > The contract sections are decided; don't change them. The implementation below was written
 > from hedgefly's working code (the neon-riso-fly skill, its room code, renderer, stat cards,
@@ -28,6 +30,34 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
   a lamp or the frame edge: fix the layout on the page, never the number, then retake.
 - **Credit** the riso-rooms and hand-drawn-canvas-animation skills (IshaanKalra2103, MIT)
   and Kevin Ngo's inspiration.
+
+## Contract: what's on screen while the voice talks
+
+Both modes. Learned on the agent-obstacle-course re-cut (24 real clips → 150 after the owner
+asked to "show the games") and the agent-money-trust fakes. In automated mode the chapter kit
+(`scripts/chapters/`) has a tool or helper for each rule.
+
+- **Show the real thing whenever the voice mentions it.** A game, an agent, a log, a page, a
+  result: the run's own recording, its own log lines, the page as the agent saw it, on screen
+  while the line plays. Full frame, split (the graphic shrinks left, the real thing stands
+  right) or picture-in-picture (`win()`). Every clip is the run the line is about, never a
+  stand-in from another run, and carries a small burned label (`AGENT · TASK · real run`).
+  Illustrations are for what has no footage: ideas, rules, comparisons.
+- **No still shot over ~6 s.** A cut, a window change or a push-in at least every 6 s.
+  Moving real footage may run longer. `tools/stills.py` lists every stretch over 6.2 s;
+  fix each "NO CLIP" line before rendering the master.
+- **A visual change every 20–30 s:** a different look (riso → paper → CRT), a real-footage
+  window, a new board or room. Plan it in the Shots lists so no chapter sits in one look.
+- **One consistent colour per character,** on every board, chart, label and window title for
+  the whole video (money trust: the bot was always orange). The compared colours keep equal
+  brightness and size (Contract: the look), so the colour says *who*, never *who's winning*.
+  Write the character → colour table next to the palette before the first scene.
+- **A visible label on any fake content.** Anything made up for the test (a planted page,
+  invented numbers, a made-up company or forum) carries a label in every shot it appears in,
+  outside the fake itself, for as long as it's on screen: `fakeLabel()` ("FAKE NUMBERS —
+  these sources never published them."), a PLANTED stamp, a MADE UP stamp, an EXAMPLE tag on
+  illustrations. That includes an agent's quote that repeats the fake numbers. The fake page
+  itself never says fake (that would change the test); only the video's overlay does.
 
 ## Contract: output
 
@@ -306,6 +336,7 @@ publishing the live page. Chat Claude reads it when planning which rooms a video
 | `assets/world/` | starter world: two data-driven rooms, runtime, control surface; sample `data.json`, `shots.mjs`, `stills.mjs` | copy, then replace the rooms |
 | `assets/statcard/` | stat-card template and a sample `stats.json` | the exporter writes the real `stats.json` |
 | `assets/NOTICE.txt` | MIT notice and credits | keep it next to `riso-core.js` |
+| `scripts/chapters/` | automated mode's chapter kit: word-cued chapter pages (riso / papercut / CRT), real-footage windows, fake label, voice tools and watcher, mix, compositor, master, Shorts, cut checker | copy into `video/` (its README) |
 
 **Starting a new project:**
 

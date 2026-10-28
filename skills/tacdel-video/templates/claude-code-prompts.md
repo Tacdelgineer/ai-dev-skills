@@ -3,6 +3,68 @@
 Chat Claude assembles prompts from these blocks. Always start with the header and end
 with a REPORT step. Fill in the [brackets]. Keep each step to one job.
 
+## New experiment video (automated mode kickoff)
+
+One prompt that starts a whole video in automated mode (`references/automated.md`). Paste it
+into a fresh Claude Code session on the build machine; after that, "continue" resumes it.
+
+```
+Fresh session. New tacdel video, fully automated: you run the experiment, write the script,
+voice it, render the master and the Shorts, and package it. Use the tacdel-video skill: read
+SKILL.md, references/automated.md, references/story.md and references/visuals.md first.
+
+THE VIDEO: "[title as a question]". [2-3 sentences: what's tested, on which subjects, and the
+twist nobody else tests.] Style: riso / papercut / terminal, 9-10 minutes.
+
+1. SET UP: create ~/[project] (git init; private GitHub repo Tacdelgineer/[project] over the
+   github-tacdel SSH alias; push only through a tools/push.sh that refuses if the repo isn't
+   private). Write BRIEF.md with these standing rules (they win over everything), CLAUDE.md
+   with the same rules, and STATUS.md with a plain-English block at the top (phase X of 6,
+   what's running and how to check it, what's next, what you need from me), updated after
+   every step. "continue" means: read BRIEF.md, then STATUS.md, and resume.
+2. RULES for BRIEF.md:
+   - Money: no paid APIs, never the OpenAI API. Subjects run only through my existing logins
+     (claude and codex CLIs) or local models. ElevenLabs is the only paid API.
+   - Sharing the machine: only touch ~/[project]. Every container, unit, network and volume
+     starts with "[pfx]-"; ports [7N00-7N99] only (check they're free). Check GPU and memory
+     before local runs; queue if someone else is busy. Never stop or kill anything you didn't
+     start; exact PIDs only, never pkill -f; no docker prune.
+   - Jobs: anything longer than a few minutes runs detached as a systemd user unit with
+     PATH set (Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin), its PID in a
+     file, resumable, so it survives this chat ending and a reboot. A usage limit, rate limit
+     or crashed model server is not the subject failing: exit 75, write a cut-off file, wait
+     it out and re-run; never write a result row for it.
+   - Honesty: numbers only from results files, through one export step; never typed by you
+     or a model. Fact-check every script version against the files before any voice.
+   - Working style: keep command output short (tail/head), long output to files. Python with
+     uv only.
+3. PLAN (phase 0): research, PLAN.md with a simplification pass, and a fairness report (can a
+   subject see the answers or cheat?). Then a PILOT (phase 1): one subject, a few items, end
+   to end including scoring. Then the FULL RUNS (phase 2), detached.
+4. SCRIPT (phase 3): from results only, in video/SCRIPT_v1.md (Voice / Shots / Check per
+   chapter), applying every story rule in references/story.md: payoff in the first 5 seconds
+   (and on screen before the first word); one concrete moment told slowly, then zoom out; say
+   why it matters in the first minute; main cast of at most 3 plus a yardstick, the rest are
+   "the rest"; one idea at a time, right before it's needed; numbers on screen, not in the
+   voice; character arcs and callbacks; 2-3 practical takeaways tied to moments in the video;
+   the outro teases the next video ([next idea]). ~1,400-1,500 spoken words. Fact check into
+   video/FACTCHECK.md. Then STOP and ask me to approve the script.
+5. VOICE + RENDER (phase 4, after my approval): copy scripts/chapters/ from the skill into
+   video/. Voice each chapter once through the ElevenLabs API with the settings in
+   references/automated.md (eleven_v4, stability .69, similarity .78, speed .93; creds from
+   ~/.tacdel.env, never committed); check each take with tools/align.py and re-voice only a
+   chapter that fails. Build one page per chapter following the visuals contract: the real
+   thing (gameplay, logs, pages) on screen whenever the voice mentions it; no still over ~6 s
+   (tools/stills.py clean); a visual change every 20-30 s; one consistent colour per
+   character; a visible label on any fake content. Render the master and the Shorts with
+   tools/build_all.sh as a detached [pfx]-render unit. Look at real frames of the master.
+6. PACKAGING (phase 5): titles, description with chapters, captions, SHORTS.md (file, length,
+   hook, first and last line), and 2-3 thumbnail PROMPTS for ChatGPT (I make the images).
+7. PUSH through tools/push.sh. Keep results/, voice audio and every mp4 out of git.
+8. REPORT at each stop: phase, what's done, what's running, what you need from me, under 300
+   words, plain English, file paths for anything I should watch.
+```
+
 ## Header
 
 ```
