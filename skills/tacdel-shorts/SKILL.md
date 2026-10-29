@@ -1,6 +1,6 @@
 ---
 name: tacdel-shorts
-description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~110-word voiceover, voice it in one take of Alireza's ElevenLabs voice (eleven_v4), animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions, plus its post text (titles, thumbnails and extras only when asked). Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
+description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~110-word voiceover, voice it in one take of Alireza's ElevenLabs voice (eleven_v4), animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions, plus its post text (titles, thumbnails and extras only when asked). Shorts that report a real test get a real-terminal proof beat. Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
 ---
 
 # tacdel Shorts
@@ -20,6 +20,14 @@ attach and clone the repo first.
 | `references/muse-brief.md` | The brief that makes Muse's trend packs ready for this skill. |
 
 The tools need Node with `playwright`, Python 3 and `ffmpeg`.
+
+## Experiment Shorts: proof beat on by default
+
+When the Short reports a test that was actually run (not a trend item read from a source), it gets the proof beat
+from `tacdel-motion` ("Proof beat" in its SKILL.md): one 2–3 s real terminal shot of a real logged model answer,
+filmed with VHS by `../tacdel-motion/tools/proof.sh`, placed where the result is revealed, plus the model names and
+the run count on screen whenever results are shown. Paste `../tacdel-motion/tools/proof.js` into the page, then run
+`proof.sh record` before the render and `proof.sh overlay` after it. Trend and story Shorts leave it off.
 
 ## Steps
 

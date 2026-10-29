@@ -1,6 +1,6 @@
 ---
 name: tacdel-motion
-description: Make a finished tacdel animated Short (about 45 s, 1080x1920) end to end from just an idea. You write a story script with soul starring Tac, the one-eyed robot, then generate one take of Alireza's ElevenLabs voice (eleven_v4) and use its word timings. The animation is drawn in code in one of five looks (Riso 2.0, Living Simulation, Tiny AI Factory, Terminal, Paper-cut), with sound effects from the library, an original code-composed score and burned-in captions. Delivers the MP4 and its post text; titles, thumbnails and extras only when asked. Use whenever Alireza gives a topic or idea for an animated explainer or story Short, or asks for "another one like the three episodes". Use tacdel-shorts instead for quick first-person trend/test Shorts.
+description: Make a finished tacdel animated Short (about 45 s, 1080x1920) end to end from just an idea. You write a story script with soul starring Tac, the one-eyed robot, then generate one take of Alireza's ElevenLabs voice (eleven_v4) and use its word timings. The animation is drawn in code in one of five looks (Riso 2.0, Living Simulation, Tiny AI Factory, Terminal, Paper-cut), with sound effects from the library, an original code-composed score and burned-in captions. Experiment Shorts get a 2–3 s real-terminal proof beat of a logged model answer plus the model names and run count on screen. Delivers the MP4 and its post text; titles, thumbnails and extras only when asked. Use whenever Alireza gives a topic or idea for an animated explainer or story Short, or asks for "another one like the three episodes". Use tacdel-shorts instead for quick first-person trend/test Shorts.
 ---
 
 # tacdel motion
@@ -25,6 +25,8 @@ The files live in `github.com/Tacdelgineer/ai-dev-skills` under `skills/tacdel-m
 | `tools/still.cjs` | One clean 1080x1920 frame without captions, used for thumbnails. |
 | `tools/est_words.py` | Estimated word timings, a fallback only when no voice can be made yet. |
 | `tools/retime.sh` | Re-times a finished page to a different take, then remixes and renders. |
+| `tools/proof.sh` | Proof beat for experiment Shorts: `record` films one real logged answer in a real terminal with VHS (`proof.mp4`); `overlay` lays it over the render, frame-exact, at the page's `PROOF` times. Uses `tools/answer.py` (prints one record from the run's JSONL log) and `tools/pageinfo.cjs`. |
+| `tools/proof.js` | Paste-in block for a page: `PROOF`, the terminal window (`proofWin`) and the model-names-and-run-count line (`castLine`). |
 | `references/script-soul.md` | How the script must sound, with a before/after example. **Read it before writing.** |
 
 Needs Node with `playwright` (`npm install` at the repo root, then `npx playwright install chromium`), Python 3, [uv](https://docs.astral.sh/uv/) for `sound.py` (it declares numpy and scipy inline, pinned by `tools/sound.py.lock`), and `ffmpeg`.
@@ -44,6 +46,15 @@ The settings live in `FINAL_VOICE.md` at the repo root (it ships inside this ski
 
 The settings stored on the voice in ElevenLabs are left over from v2 and apply to any request that sends none, the Claude ElevenLabs connector included (it can't pass sliders). So voice through `tools/voice.py`, which always sends them, and don't edit the stored ones. A full ~110-word script reads at about 150–170 wpm (148–168 measured on seven v4 Shorts, Oct 27, 2026). A one-sentence test has no pauses and runs around 200 wpm, which is expected. If a full script runs far above the range, check that the request carried the settings and say what you found in the delivery. Never pretend the settings were applied, and never swap to another voice or model.
 
+## Proof beat (experiment Shorts)
+
+An **experiment Short** reports a test that was actually run (models answered, results were counted). A **story Short** is an idea told with Tac and no run behind it. Experiment Shorts get these by default; story Shorts don't, unless Alireza asks:
+
+- **Proof beat:** one 2–3 s real terminal shot, placed right where the result is revealed, showing a real model answer from the run's log. `tools/proof.sh record <episode dir> '<log key>' [--from WORD --lines 6]` types `answer '<key>'` in a real shell (VHS) and films the record as saved. Pick the answer the voice is revealing at that moment (the leak, the miss, the wrong number). Never retype, trim inside, edit or stage it; `--from` only picks where the excerpt starts and marks the cut with "...".
+- **Who and how many:** whenever results are on screen, show the model names and the run count (`castLine(a, '5 runs each')`), plus who labelled the answers if a judge model did.
+- **The log:** the experiment writes JSONL, one record per model call, with `key` (e.g. `claude|split|r2`), `model`, `run`, `t` and `answer`. The proof shot reads `logs/calls.jsonl` in the episode folder.
+- **Setup once:** `vhs` and `ttyd` on PATH (charmbracelet/vhs and tsl0922/ttyd release binaries; check their checksums). On ARM64 Linux VHS can't download a browser; `proof.sh` then runs Playwright's Chromium through a temporary wrapper.
+
 ## Steps
 
 1. **Facts.** Use primary sources only, and open each page. Build a fact table with these columns: value · what it compares · link · tag (measured / vendor-reported / example). Put at most 1–2 real numbers on screen. A vendor number is said and shown as theirs, for their system. Label demo data on screen as EXAMPLE or DEMO.
@@ -54,7 +65,7 @@ The settings stored on the voice in ElevenLabs are left over from v2 and apply t
    - Read the `pick_take.py` line: a match under 100% names the words that went wrong. Re-voice only then, and say so in the delivery.
    - Without an API key (claude.ai with only the connector), Alireza makes the one take on the ElevenLabs Text to Speech page with Eleven v4 and the settings above and attaches the MP3. Transcribe it with `creative_transcribe_audio` (`eleven_scribe_v1`, free) and run `pick_take.py` on that transcript. Don't voice through `creative_generate_speech`: it would use the stored v2-era settings.
 5. **Timing.** Run `python3 ../tacdel-shorts/tools/timing.py caps words.json chunks.txt` to get `CAPS`. Set `DUR` = last end + about 1.6 s, and `PAGE_END` = the same number.
-6. **Animate.** Copy the closest `looks/*.html` and keep its helpers, Tac, captions function, player block, `WARP`/`warp`, `PAGE_END`, `LOOK`, the `?pending` tag and `Object.assign(window, …)`. Replace `CAPS`, `DUR`, the scene functions, `CUES` and `MUSIC`. Key every move to `S(k)` (start of chunk k), `E(k)` or `M(k, f)`.
+6. **Animate.** Copy the closest `looks/*.html` and keep its helpers, Tac, captions function, player block, `WARP`/`warp`, `PAGE_END`, `LOOK`, the `?pending` tag and `Object.assign(window, …)`. Replace `CAPS`, `DUR`, the scene functions, `CUES` and `MUSIC`. Key every move to `S(k)` (start of chunk k), `E(k)` or `M(k, f)`. Experiment Short: paste `tools/proof.js` after `CUES`, set `PROOF = { t0, t1, key }` (2–3 s at the reveal), call `proofWin(t)` after the scenes and before the captions, and `castLine(…)` while results are on screen. Then run `tools/proof.sh record` for that key.
    - Frame 0 is the hook: the title and Tac are fully visible, with no fade-in.
    - Every physical action gets a cue (`cue(t, name, gain, rate, offset, length)`).
    - `MUSIC` is `[[t, section], …, [PAGE_END, 'end']]`, using the section names of that look in `tools/sound.py` (add sections there if needed). Cut the music on the gut-punch.
@@ -62,7 +73,7 @@ The settings stored on the voice in ElevenLabs are left over from v2 and apply t
 8. **Sound.** Run `uv run tools/sound.py page.html mix.m4a voice.mp3` (it ends at -14 LUFS). uv installs numpy and scipy on the first run; no venv or pip needed.
    - Cover every action with the library in `tools/sfx/` and the synth names below. Make no new ElevenLabs effects unless Alireza asks for one; then use `creative_generate_in_flow`, `node_type: sfx`, `eleven_text_to_sound_v2` (about 17 credits per take), poll with one session id per effect, save it as `tools/sfx/<name>.mp3`, and add it to the repo.
    - Synth names: pop, tick, click, key, whoosh, swish, wipe, thunk, ding, coin, sparkle, chime, blip, wink, riser, freeze, roll, splat, boing, whirr, beep, ping, radar, alarm, steam, hum, lock, spin.
-9. **Render.** Run `node ../tacdel-shorts/tools/render.cjs page.html out.mp4 <DUR> mix.m4a`. Then:
+9. **Render.** Run `node ../tacdel-shorts/tools/render.cjs page.html out.mp4 <DUR> mix.m4a`. Experiment Short: then `tools/proof.sh overlay page.html out.mp4 final.mp4` and check a frame inside the beat shows the clip. Then:
    - check `ffprobe` duration and loudness (`ffmpeg -af ebur128`);
    - pull 3 frames from the MP4.
 
