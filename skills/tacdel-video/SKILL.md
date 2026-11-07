@@ -65,6 +65,7 @@ charts `results/filmpack/*.png`. Footage and mp4s stay out of git.
     keys, voice ids or home paths; use placeholders.
 11. **Credit** borrowed styles, skills, data and libraries in the description and README.
 12. **The live page (gh-pages) is published** only when the prompt explicitly allows it.
+13. **Visuals over data:** one number per shot, every number gets a picture, charts and stat cards at most ~20% of runtime — see visuals.md.
 
 ## Lessons
 

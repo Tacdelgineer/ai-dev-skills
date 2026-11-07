@@ -59,6 +59,18 @@ asked to "show the games") and the agent-money-trust fakes. In automated mode th
   illustrations. That includes an agent's quote that repeats the fake numbers. The fake page
   itself never says fake (that would change the test); only the video's overlay does.
 
+## Contract: visuals over data
+
+(Owner feedback, Nov 2026: "too much data, not enough visuals".)
+
+- One number per shot. A second number gets its own shot.
+- Every number gets a picture: a real-world comparison (50 km = Santa Monica to Pasadena), an object (ticket, thermometer, receipt) or motion. Never a bare number on black.
+- Charts, tables and stat cards fill at most ~20% of runtime. Show the one row that matters; full tables go in the README.
+- Every chapter opens on a world shot (a place, object, character or real footage), never a chart.
+- 3–5 hero shots per video in 3D: three.js inside the chapter pages for most, Blender (scripted, rendered on the DGX) for the 1–2 biggest moments.
+- Real public footage (e.g. NASA/NOAA), credited, beats a drawing of the same thing.
+- The render report lists seconds by shot type (world / real footage / 3D / chart+stat / terminal); fix it before the master if chart+stat is over 20%.
+
 ## Contract: output
 
 - **Footage:** `results/final_footage/{wide,vertical}/NN_chapter_shot.mp4` at 1920x1080 and
