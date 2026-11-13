@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>I took my AI for a walk</title>
+<!--
+  SHORT · "I took my AI for a walk" · chalkboard · 1080x1920
+  Look: black board, white chalk lines that draw themselves on, hand-sketched, black and white only.
+  Timed to one eleven_v4 take (voice.mp3 + words.json from tacdel-motion/tools/voice.py).
+  RUN   Double-click. Put the take next to this file as voice.mp3 and press Space: it plays in sync.
+  KEYS  Space play/pause · R restart · Left/Right scene · H hide controls · F fullscreen
+  URL   ?clean hides controls · ?nocaps hides captions · ?t=12 freezes a moment
+  FACTS Oppezzo & Schwartz 2014, JEP:LMC 40(4), doi 10.1037/a0036577 (81% of 48, treadmill facing a blank wall).
+        Test numbers: own local run, 10 + 10 runs, qwen3.6:35b-a3b ideas, glm4 judge.
+  STYLE To reuse: keep the helpers (board, grain, stroke/sketch/write, tac, SIGHT), the captions and the player;
+        replace CAPS, SCENES, DUR and the scene functions. Key cues with at(i) = start of caption chunk i.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cabin+Sketch:wght@400;700&family=Patrick+Hand&family=Inter:wght@700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#b9b2a6;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  canvas{height:min(calc(100vh - 72px),calc((100vw - 24px)*16/9));width:auto;display:block}
+  #hud{width:min(calc((100vh - 72px)*9/16),calc(100vw - 24px));display:flex;flex-direction:column;gap:7px}
+  #bar{position:relative;height:6px;background:#272727;border-radius:3px;cursor:pointer}
+  #fill{position:absolute;left:0;top:0;bottom:0;background:#e9e2d5;border-radius:3px}
+  .tick{position:absolute;top:-3px;width:2px;height:12px;background:#555}
+  #row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden}
+  .clean #hud{display:none} .clean canvas{height:min(100vh,100vw*16/9)}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"><div id="bar"><div id="fill"></div></div><div id="row"><span id="info"></span><span>Space · R · ← → · H</span></div></div>
+<script>
+const TITLE = 'I took my AI for a walk · chalkboard';
+const CAPS = [
+  ['Can you take an AI for a walk?', 0.0, 2.0],
+  ['I tried.', 2.24, 3.12],
+  ['In a Stanford study,', 3.36, 4.64],
+  ['walking made 81% of people more creative.', 4.84, 7.92],
+  ['Even on a treadmill,', 8.0, 9.12],
+  ['facing a blank wall.', 9.16, 10.72],
+  ['Walking gets ideas flowing.', 10.96, 12.88],
+  ['My AI can’t walk,', 13.2, 14.64],
+  ['so I gave it the sights.', 14.72, 16.24],
+  ['A barking dog.', 16.48, 17.76],
+  ['A bakery smell.', 17.84, 19.12],
+  ['A broken neon sign.', 19.16, 20.88],
+  ['Then one question:', 21.08, 22.4],
+  ['list 10 unusual uses for a brick.', 22.48, 25.36],
+  ['10 runs with a walk,', 25.48, 26.88],
+  ['10 without.', 27.0, 27.84],
+  ['Another AI scored every idea blind.', 28.08, 30.72],
+  ['Without the walk: 2.9 out of 5.', 30.96, 33.84],
+  ['With it: 3.0.', 33.92, 35.68],
+  ['Basically a tie.', 35.88, 36.96],
+  ['But the walk gave more one-of-a-kind ideas.', 37.0, 39.84],
+  ['36 versus 22.', 39.96, 42.0],
+  ['A walk didn’t make my AI more original.', 42.04, 44.56],
+  ['It made it repeat itself less.', 44.64, 46.64],
+];
+const SCENES = [0, at0(2), at0(7), at0(12), at0(17), at0(20), at0(22)], DUR = 47.9;
+function at0(i) { return CAPS[i][1]; }
+// re-timing to a new voice take: [[time in the new take, time these scenes were written for], ...]; empty = none
+const WARP = [];
+const warp = t => { if (WARP.length < 2) return t; let i = 0; while (i < WARP.length - 2 && t > WARP[i + 1][0]) i++;
+  const [a0, b0] = WARP[i], [a1, b1] = WARP[i + 1]; return b0 + (t - a0) * (b1 - b0) / (a1 - a0); };
+const W = 1080, H = 1920;
+const SANS = '"Inter","Helvetica Neue","Segoe UI",Arial,sans-serif';
+
+/* ---------- chalkboard helpers (black board, white chalk that draws itself on) ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, u) => a + (b - a) * u;
+const eo = u => 1 - Math.pow(1 - clamp(u), 3), e5 = u => 1 - Math.pow(1 - clamp(u), 5);
+const back = u => { u = clamp(u); const c = 1.8; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+const sceneAt = t => { let i = 0; while (i < SCENES.length - 1 && t >= SCENES[i + 1]) i++; return i; };
+const at = at0;                       // start time of caption chunk i (cue words)
+let T = 0;
+const C = { board: '#121312', chalk: '#f1f0ea', dim: 'rgba(241,240,234,.55)', faint: 'rgba(241,240,234,.28)' };
+const HAND = '"Cabin Sketch","Patrick Hand","Comic Sans MS",cursive', NOTE = '"Patrick Hand","Comic Sans MS",cursive';
+const hash = (a, b = 0, c = 0) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const boil = () => Math.floor(T * 8) % 3;         // lines re-sketch slightly, 8 times a second
+
+// the chalk layer: everything chalk is drawn here, then grain is cut out of it, then it goes on the board
+const L = document.createElement('canvas'); L.width = W; L.height = H; const lx = L.getContext('2d');
+const GRAIN = document.createElement('canvas'); GRAIN.width = W; GRAIN.height = H;
+const BOARD = document.createElement('canvas'); BOARD.width = W; BOARD.height = H;
+(function textures() {
+  const g = GRAIN.getContext('2d'); let s = 7;
+  const r = () => (s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296;
+  for (let k = 0; k < 260000; k++) { g.fillStyle = `rgba(0,0,0,${.25 + r() * .7})`; g.fillRect(r() * W, r() * H, 1 + r() * 2, 1 + r() * 1.6); }
+  const b = BOARD.getContext('2d'); b.fillStyle = C.board; b.fillRect(0, 0, W, H);
+  for (let k = 0; k < 14; k++) { const x = r() * W, y = r() * H, rr = 200 + r() * 420, gr = b.createRadialGradient(x, y, 0, x, y, rr);
+    gr.addColorStop(0, `rgba(241,240,234,${.018 + r() * .03})`); gr.addColorStop(1, 'rgba(241,240,234,0)'); b.fillStyle = gr; b.fillRect(0, 0, W, H); }
+  b.lineCap = 'round';
+  for (let k = 0; k < 7; k++) { const y = r() * H, x = r() * W; b.strokeStyle = `rgba(241,240,234,${.008 + r() * .01})`; b.lineWidth = 60 + r() * 90;
+    b.beginPath(); b.moveTo(x - 300, y); b.quadraticCurveTo(x, y - 60 + r() * 120, x + 300 + r() * 200, y + r() * 40); b.stroke(); }
+  for (let k = 0; k < 9000; k++) { b.fillStyle = `rgba(241,240,234,${r() * .07})`; b.fillRect(r() * W, r() * H, 1.5, 1.5); }
+})();
+
+// paths are arrays of [x,y]; densify so we can draw any fraction of them by length
+function dens(pts, step = 7) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) { const [a, b] = [pts[i - 1], pts[i]], d = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(d / step));
+    for (let k = 1; k <= n; k++) out.push([lerp(a[0], b[0], k / n), lerp(a[1], b[1], k / n)]); }
+  return out;
+}
+const plen = pts => { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return s; };
+// one chalk stroke, drawn on up to fraction p; three rough passes give the dusty edge
+function stroke(pts, p = 1, o = {}) {
+  if (p <= 0 || pts.length < 2) return; const d = dens(pts), n = Math.max(2, Math.ceil(d.length * clamp(p))), w = o.w || 7, a = o.a ?? 1, seed = o.seed || 1, bo = boil();
+  lx.save(); lx.lineCap = 'round'; lx.lineJoin = 'round'; lx.strokeStyle = o.col || C.chalk;
+  for (let pass = 0; pass < 3; pass++) {
+    lx.globalAlpha = a * [.85, .45, .3][pass]; lx.lineWidth = w * [1, .7, 1.25][pass]; lx.beginPath();
+    for (let i = 0; i < n; i++) { const j = (o.jit ?? 1.6) * (pass ? 1.6 : 1); const x = d[i][0] + (hash(i, seed + pass * 31, bo) - .5) * j, y = d[i][1] + (hash(i, seed + pass * 57 + 9, bo) - .5) * j;
+      i ? lx.lineTo(x, y) : lx.moveTo(x, y); }
+    lx.stroke();
+  }
+  if (p < 1 && !o.noTip) { const e = d[n - 1]; lx.globalAlpha = a; lx.fillStyle = C.chalk; lx.beginPath(); lx.arc(e[0], e[1], w * .9, 0, 7); lx.fill(); }
+  lx.restore();
+}
+// a set of strokes drawn one after another, sharing one progress value (by length)
+function sketch(paths, p, o = {}) {
+  if (p <= 0) return; const lens = paths.map(plen), tot = lens.reduce((a, b) => a + b, 0) || 1; let acc = 0;
+  paths.forEach((pt, i) => { const s = acc / tot, e = (acc + lens[i]) / tot; acc += lens[i]; stroke(pt, (clamp(p) - s) / (e - s || 1), { ...o, seed: (o.seed || 1) + i * 13, noTip: o.noTip || p >= 1 }); });
+}
+// shape makers (hand-drawn: slight bows and overshoot)
+const ln = (x1, y1, x2, y2, bow = 4, seed = 1) => { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1, L0 = Math.hypot(dx, dy) || 1, b = (hash(seed, 3) - .5) * bow * 2;
+  const pts = []; for (let k = 0; k <= 12; k++) { const u = k / 12, s = Math.sin(u * Math.PI) * b; pts.push([lerp(x1, x2, u) - dy / L0 * s, lerp(y1, y2, u) + dx / L0 * s]); } return pts; };
+const circ = (cx, cy, rx, ry = rx, a0 = -Math.PI * .6, sweep = Math.PI * 2.12, seed = 1) => { const pts = [], n = Math.max(16, Math.round((rx + ry) * .35));
+  for (let k = 0; k <= n; k++) { const a = a0 + sweep * k / n, wob = 1 + (hash(seed, k >> 2) - .5) * .05; pts.push([cx + Math.cos(a) * rx * wob, cy + Math.sin(a) * ry * wob]); } return pts; };
+const box = (x, y, w, h, seed = 1) => [ln(x - 4, y, x + w + 6, y, 3, seed), ln(x + w, y - 4, x + w, y + h + 5, 3, seed + 1), ln(x + w + 4, y + h, x - 5, y + h, 3, seed + 2), ln(x, y + h + 3, x, y - 5, 3, seed + 3)];
+const curve = (pts, n = 40) => { const out = []; for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+  for (let k = 0; k < n; k++) { const u = k / n, u2 = u * u, u3 = u2 * u; out.push([0, 1].map(j => .5 * (2 * p1[j] + (-p0[j] + p2[j]) * u + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * u2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * u3))); } }
+  out.push(pts[pts.length - 1]); return out; };
+const wave = (x, y, w, amp = 8, n = 3) => { const pts = []; for (let k = 0; k <= 40; k++) pts.push([x + w * k / 40, y + Math.sin(k / 40 * Math.PI * 2 * n) * amp]); return pts; };
+const tf = (paths, dx, dy, s = 1) => paths.map(p => p.map(([x, y]) => [dx + x * s, dy + y * s]));
+
+// chalk writing: letters appear left to right like a hand writing them
+function write(s, x, y, size, p, o = {}) {
+  if (p <= 0) return; lx.save(); lx.font = `${o.wt || 700} ${size}px ${o.font || HAND}`; lx.textAlign = o.align || 'left'; lx.textBaseline = 'alphabetic';
+  const w = lx.measureText(s).width, x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  lx.beginPath(); lx.rect(x0 - 10, y - size * 1.1, (w + 20) * clamp(p), size * 1.5); lx.clip();
+  lx.globalAlpha = o.a ?? 1; lx.fillStyle = o.col || C.chalk; lx.fillText(s, x, y);
+  lx.globalAlpha = (o.a ?? 1) * .35; lx.fillText(s, x + 1.5, y - 1); lx.restore();
+}
+const textW = (s, size, o = {}) => { lx.save(); lx.font = `${o.wt || 700} ${size}px ${o.font || HAND}`; const w = lx.measureText(s).width; lx.restore(); return w; };
+const fitSize = (s, width, max = 200, o = {}) => Math.min(max, 100 * width / textW(s, 100, o));
+// hatched fill (chalk shading) for bars; drawn on bottom to top
+function hatch(x, y, w, h, p, gap = 16, seed = 1) { if (p <= 0) return; const paths = []; for (let k = -w; k < h; k += gap) { const y1 = y + h - k, x2 = x + w;
+  const a = [x, y1], b = [x2, y1 - w]; // 45 degree line clipped to the box
+  const cl = ([px, py]) => [px, py]; paths.push([cl(a), cl(b)]); }
+  lx.save(); lx.beginPath(); lx.rect(x, y + h - h * clamp(p), w, h * clamp(p)); lx.clip(); paths.forEach((pt, i) => stroke(pt, 1, { w: 4, a: .7, seed: seed + i, noTip: true })); lx.restore(); }
+
+/* ---------- Tac in chalk: the one-eyed robot ---------- */
+function tac(x, y, s, o = {}) { // (x,y) = feet; o.p draw-on progress, o.walk leg phase, o.look eye offset, o.leash
+  const p = o.p ?? 1, ph = o.walk ?? 0, sw = Math.sin(ph) * .45, bob = Math.abs(Math.cos(ph)) * 6 * s * (o.walk !== undefined ? 1 : 0);
+  const X = v => x + v * s, Y = v => y - bob + v * s;
+  const legs = [[[X(-18), Y(-70)], [X(-18 + Math.sin(sw) * 60), Y(-70 + Math.cos(sw) * 70)]], [[X(18), Y(-70)], [X(18 - Math.sin(sw) * 60), Y(-70 + Math.cos(sw) * 70)]]];
+  const body = box(X(-45), Y(-160), 90 * s, 90 * s, 5), head = box(X(-62), Y(-275), 124 * s, 100 * s, 9);
+  const eye = circ(X(0), Y(-225), 30 * s, 30 * s, -1.9, Math.PI * 2.1, 3);
+  const arms = [ln(X(-45), Y(-140), X(-80), Y(-95 + Math.sin(ph + 1) * 10), 3, 11), ln(X(45), Y(-140), X(80), Y(-95 - Math.sin(ph + 1) * 10), 3, 12)];
+  const ant = [ln(X(0), Y(-275), X(0), Y(-315), 2, 13), circ(X(0), Y(-325), 10 * s, 10 * s, 0, Math.PI * 2.1, 4)];
+  sketch([...head, eye, ...ant, ...body, ...arms, ...legs], p, { w: 7 * Math.max(.7, s), seed: 40 });
+  if (p > .6) { const lk = o.look || [0, 0]; lx.save(); lx.globalAlpha = clamp((p - .6) / .2); lx.fillStyle = C.chalk; lx.beginPath(); lx.arc(X(lk[0] * 12), Y(-225 + lk[1] * 12), 11 * s, 0, 7); lx.fill(); lx.restore(); }
+  if (o.leash) stroke(curve([[X(-60), Y(-150)], ...o.leash]), o.leashP ?? 1, { w: 5, seed: 77 });
+  return { neck: [X(-45), Y(-150)], top: [X(0), Y(-330)] };
+}
+
+/* ---------- street sights: quick chalk sketches, ~ 200 px, origin top-left ---------- */
+const SIGHT = {
+  dog: () => [circ(70, 90, 55, 28, 0, Math.PI * 2.1, 2), circ(140, 55, 26, 24, 0, Math.PI * 2.1, 3), ln(150, 40, 172, 28, 2, 1), ln(40, 112, 34, 150), ln(62, 116, 60, 150), ln(92, 116, 96, 150), ln(112, 110, 118, 150), curve([[16, 84], [0, 58], [6, 40]])],
+  neon: () => [...box(10, 30, 190, 90, 6), ln(60, 0, 70, 30, 2, 2), ln(150, 0, 140, 30, 2, 3), curve([[120, 30], [128, 62], [116, 84], [126, 120]], 12)],
+  bread: () => [curve([[10, 120], [30, 70], [100, 60], [180, 70], [200, 120], [10, 120]], 14), ln(60, 82, 74, 108), ln(100, 76, 114, 104), ln(140, 80, 152, 106),
+    curve([[70, 50], [60, 30], [76, 12], [64, -10]], 10), curve([[110, 44], [100, 24], [116, 6], [104, -16]], 10), curve([[150, 50], [140, 30], [156, 12], [144, -10]], 10)],
+  chalkart: () => [circ(50, 50, 30, 30, 0, Math.PI * 2.1, 5), ...[0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = k * Math.PI / 4; return ln(50 + Math.cos(a) * 40, 50 + Math.sin(a) * 40, 50 + Math.cos(a) * 58, 50 + Math.sin(a) * 58, 1, k); }),
+    ...box(110, 70, 90, 70, 7), ln(102, 72, 155, 30, 2, 8), ln(155, 30, 208, 72, 2, 9), ...box(145, 108, 22, 32, 10)],
+  gutter: () => [ln(0, 40, 210, 40), ln(0, 40, 0, 70), wave(10, 90, 190, 7, 4), wave(30, 118, 160, 6, 3), wave(60, 142, 110, 5, 2), ...box(80, 60, 60, 24, 4), ln(95, 60, 95, 84, 1, 4), ln(110, 60, 110, 84, 1, 5), ln(125, 60, 125, 84, 1, 6)],
+  bus: () => [...box(0, 20, 210, 110, 8), ...box(16, 36, 40, 34, 9), ...box(66, 36, 40, 34, 10), ...box(116, 36, 80, 50, 11), circ(50, 132, 18, 18, 0, Math.PI * 2.1, 6), circ(160, 132, 18, 18, 0, Math.PI * 2.1, 7)],
+};
+
+
+/* ---------- scenes (each draws chalk onto the layer lx; cue times come from CAPS) ---------- */
+const MODELS = 'ideas: qwen3.6:35b-a3b · judge: glm4 (9B) · 10 + 10 runs';
+function note(s, x, y, size, p, o = {}) { write(s, x, y, size, p, { font: NOTE, wt: 400, ...o }); }
+function along(pts, u) { // point + direction at fraction u of a polyline's length
+  const d = dens(pts, 4), tot = plen(d); let goal = clamp(u) * tot, acc = 0;
+  for (let i = 1; i < d.length; i++) { const sl = Math.hypot(d[i][0] - d[i - 1][0], d[i][1] - d[i - 1][1]); if (acc + sl >= goal) { const k = (goal - acc) / (sl || 1); return [lerp(d[i - 1][0], d[i][0], k), lerp(d[i - 1][1], d[i][1], k), Math.sign(d[i][0] - d[i - 1][0])]; } acc += sl; }
+  const e = d[d.length - 1]; return [e[0], e[1], 1];
+}
+function bulb(x, y, s, p) { sketch([circ(x, y, 22 * s, 24 * s, Math.PI * .75, Math.PI * 1.55, 2), ln(x - 10 * s, y + 20 * s, x - 10 * s, y + 36 * s, 1, 3), ln(x + 10 * s, y + 20 * s, x + 10 * s, y + 36 * s, 1, 4), ln(x - 10 * s, y + 36 * s, x + 10 * s, y + 36 * s, 1, 5),
+  ln(x, y - 34 * s, x, y - 46 * s, 1, 6), ln(x - 28 * s, y - 20 * s, x - 38 * s, y - 28 * s, 1, 7), ln(x + 28 * s, y - 20 * s, x + 38 * s, y - 28 * s, 1, 8)], p, { w: 5 }); }
+function tally(x, y, n, p, seed = 1) { const paths = []; for (let k = 0; k < n; k++) { const g = Math.floor(k / 5), j = k % 5, gx = x + g * 150;
+  paths.push(j < 4 ? ln(gx + j * 26, y, gx + j * 26 + 4, y + 90, 2, seed + k) : ln(gx - 12, y + 70, gx + 92, y + 18, 2, seed + k)); } sketch(paths, p, { w: 6 }); }
+function brick(x, y, s, p) { // 3/4 view brick with two holes
+  sketch([...box(x, y + 60 * s, 300 * s, 110 * s, 21), ln(x, y + 60 * s, x + 80 * s, y), ln(x + 80 * s, y, x + 380 * s, y), ln(x + 300 * s, y + 60 * s, x + 380 * s, y), ln(x + 380 * s, y, x + 380 * s, y + 110 * s), ln(x + 380 * s, y + 110 * s, x + 300 * s, y + 170 * s),
+    circ(x + 140 * s, y + 30 * s, 30 * s, 12 * s, 0, 6.6, 5), circ(x + 260 * s, y + 30 * s, 30 * s, 12 * s, 0, 6.6, 6)], p, { w: 7 });
+}
+
+function s1(lt, t) { // Can you take an AI for a walk? I tried.
+  write('Can you take', 90, 400, 132, (t - .1) / .6); write('an AI for', 90, 545, 132, (t - .55) / .5); write('a walk?', 90, 690, 132, (t - .95) / .5);
+  const walking = t > at(1), ph = walking ? (t - at(1)) * 7 : undefined;
+  sketch([ln(60, 1330, 1000, 1336, 3, 2)], (t - .3) / .6, { w: 6 });
+  tac(640, 1322, 1.05, { p: (t - .35) / 1.2, walk: ph, look: [-.6, -.2], leash: [[400, 1000], [160, 880], [-20, 830]], leashP: (t - 1.3) / .5 });
+  if (walking) for (let k = 0; k < 3; k++) { const u = ((t - at(1)) * 1.6 + k / 3) % 1; lx.save(); lx.globalAlpha = (1 - u) * .7; lx.strokeStyle = C.chalk; lx.lineWidth = 4;
+    lx.beginPath(); lx.arc(560 - u * 140, 1310 - u * 30, 10 + u * 22, 0, 7); lx.stroke(); lx.restore(); }
+}
+function s2(lt, t) { // Stanford: walking made 81% more creative, even on a treadmill facing a blank wall
+  note('A STANFORD STUDY', 90, 290, 54, (t - at(2)) / .5);
+  write('81%', 90, 560, 290, (t - at(3) - .5) / .6);
+  note('of people got more creative', 90, 650, 56, (t - at(3) - 1.2) / .6); note('while walking', 90, 715, 56, (t - at(3) - 1.6) / .4);
+  const a = at(4), ph = t > a ? (t - a) * 6 : 0, sw = Math.sin(ph) * .5;
+  // treadmill
+  sketch([...box(200, 1236, 520, 34, 31), circ(222, 1253, 17, 17, 0, 6.6, 3), circ(698, 1253, 17, 17, 0, 6.6, 4), ln(690, 1236, 740, 1060, 2, 5), ln(740, 1060, 660, 1048, 2, 6), ln(260, 1270, 240, 1320), ln(660, 1270, 680, 1320)], (t - a) / .9, { w: 6 });
+  for (let k = 0; k < 6; k++) { const x = 220 + ((k * 90 - (t - a) * 160) % 540 + 540) % 540; if (t > a + .9) stroke(ln(x, 1244, x + 18, 1244, 0, k), 1, { w: 3, a: .6, noTip: true }); }
+  // walker (stick figure) facing the wall on the right
+  const hx = 470, hy = 900;
+  sketch([circ(hx, hy, 36, 38, 0, 6.6, 7), ln(hx, hy + 38, hx - 4, hy + 180, 2, 8), ln(hx - 4, hy + 180, hx - 4 + Math.sin(sw) * 70, hy + 330, 2, 9), ln(hx - 4, hy + 180, hx - 4 - Math.sin(sw) * 70, hy + 330, 2, 10),
+    ln(hx - 2, hy + 70, hx - 2 - Math.sin(sw) * 60, hy + 160, 2, 11), ln(hx - 2, hy + 70, hx - 2 + Math.sin(sw) * 60, hy + 160, 2, 12)], (t - a - .3) / .9, { w: 7 });
+  // blank wall
+  const b = at(5); sketch([ln(890, 790, 896, 1330, 3, 13), ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(k => ln(896, 830 + k * 58, 940, 806 + k * 58, 1, 20 + k))], (t - b) / .7, { w: 6 });
+  note('blank wall', 850, 770, 42, (t - b - .4) / .5, { align: 'right' });
+  // ideas flowing
+  const f = at(6); [[380, 800], [560, 790], [300, 700], [640, 680], [470, 640]].forEach(([x, y], k) => { const u = t - f - k * .28; if (u > 0) bulb(x, y - Math.min(u, 2) * 14, .9, u / .45); });
+  note('Oppezzo & Schwartz, Stanford, 2014 · 48 people', 90, 1385, 34, (t - at(3) - 1.8) / .6, { a: .7 });
+}
+const ROUTE = curve([[90, 560], [500, 556], [900, 566], [960, 740], [880, 930], [500, 936], [140, 926], [90, 1110], [170, 1300], [560, 1296], [960, 1302]], 30);
+const SPOTS = [ // sight, x, y (top-left), pop cue
+  ['dog', 150, 260, () => at(9)], ['bread', 580, 240, () => at(10)], ['neon', 600, 600, () => at(11)],
+  ['chalkart', 170, 600, () => at(11) + .5], ['gutter', 150, 975, () => at(11) + .8], ['bus', 600, 965, () => at(11) + 1.1]];
+function s3(lt, t, t1) { // My AI can't walk, so I gave it the sights
+  const a = at(7); sketch([ROUTE], (t - a) / 1.3, { w: 6, a: .55 });
+  [0, 1, 2, 3, 4, 5, 6, 7].forEach(k => { const [x, y] = along(ROUTE, .04 + k * .125); stroke(ln(x - 10, y + 16, x + 10, y + 16, 0, k), clamp((t - a - .8 - k * .06) / .2), { w: 3, a: .35, noTip: true }); });
+  const go = at(8), u = clamp((t - go) / (t1 - go + .3)) * .93, [x, y, dir] = along(ROUTE, u);
+  lx.save(); lx.translate(x, y); if (dir < 0) lx.scale(-1, 1); lx.translate(-x, -y);
+  tac(x, y, .44, { p: (t - a) / .8, walk: t > go ? (t - go) * 8 : undefined, look: [.6, -.2] }); lx.restore();
+  SPOTS.forEach(([k, sx, sy, cue], i) => { const c = cue(), p = (t - c) / .55; if (p <= 0) return; const sc = 1.0 * back(clamp(p * 1.6)) ** .25;
+    sketch(tf(SIGHT[k](), sx, sy, sc), p, { w: 6, seed: 100 + i * 17 }); });
+  note('woof!', 370, 280, 40, (t - at(9) - .4) / .3);
+  if (t > at(11) + .3) { let x = 628; const on = Math.floor(T * 9) % 5 !== 0;  // OPEN, with a dying E
+    ['O', 'P', 'E', 'N'].forEach((ch, k) => { write(ch, x, 700, 60, 1, { a: k === 2 ? (Math.floor(T * 13) % 3 ? .12 : .9) : on ? 1 : .4 }); x += textW(ch, 60) + 6; }); }
+  note('6 random sights, new ones every run', 90, 1392, 40, (t - at(11) - 1.8) / .5, { a: .8 });
+}
+function s4(lt, t) { // the test: 10 unusual uses for a brick, 10 runs each, a blind judge
+  brick(340, 240, .95, (t - at(12)) / .8);
+  write('List 10 unusual uses', 540, 520, 76, (t - at(13)) / .8, { align: 'center' }); write('for a brick.', 540, 600, 76, (t - at(13) - .7) / .6, { align: 'center' });
+  const c = at(14); write('NO WALK', 300, 720, 64, (t - c) / .4, { align: 'center' }); write('WALK', 780, 720, 64, (t - at(15) + .3) / .4, { align: 'center' });
+  tally(195, 760, 10, (t - c - .2) / 1.0, 3); tally(675, 760, 10, (t - at(15) - .1) / .8, 40);
+  note('10 runs × 10 ideas', 300, 905, 36, (t - c - .9) / .4, { align: 'center', a: .8 }); note('10 runs × 10 ideas', 780, 905, 36, (t - at(15) - .6) / .4, { align: 'center', a: .8 });
+  sketch([ln(540, 690, 544, 920, 2, 9)], (t - c) / .5, { w: 4, a: .5 });
+  const j = at(16);
+  tac(220, 1330, .6, { p: (t - j) / .7, look: [0, 0] }); // the judge: a second robot, blindfolded
+  if (t > j + .5) sketch([ln(175, 1210, 265, 1194, 2, 4), ln(265, 1194, 290, 1180, 1, 5)], (t - j - .5) / .3, { w: 12 });
+  [0, 1, 2, 3, 4].forEach(k => { const x = 400 + k * 112, y = 1150 + (k % 2) * 30, p = (t - j - .3 - k * .12) / .3; if (p <= 0) return;
+    sketch(box(x, y, 88, 120, 50 + k), p, { w: 5 }); write(String(k + 1), x + 44, y + 82, 60, p, { align: 'center' }); });
+  note('judge sees each idea alone, shuffled, round hidden', 400, 1340, 36, (t - j - 1) / .5, { a: .8 });
+  note(MODELS, 90, 1395, 36, (t - j - 1.3) / .5, { a: .7 });
+}
+function bars(t, title, sub, L1, L2, v1, v2, max, cue, lab) { // shared chalk chart: bars start at zero
+  write(title, 90, 300, 80, (t - cue) / .6); note(sub, 92, 360, 40, (t - cue - .3) / .4, { a: .75 });
+  const base = 1150, top = 520, sc = (base - top) / max;
+  sketch([ln(150, 470, 150, base, 2, 1), ln(130, base, 940, base, 2, 2)], (t - cue - .2) / .6, { w: 6 });
+  for (let k = 0; k <= max; k += lab.step) { const y = base - k * sc; stroke(ln(136, y, 164, y, 0, k), clamp((t - cue - .6) / .3), { w: 4, noTip: true }); note(String(k), 120, y + 12, 34, (t - cue - .6) / .3, { align: 'right', a: .8 }); }
+  [[L1, v1, 260, lab.c1], [L2, v2, 620, lab.c2]].forEach(([l, v, x, c], i) => { const p = eo((t - c) / .8), h = v * sc;
+    if (p > 0) { sketch(box(x, base - h * p, 220, h * p, 70 + i * 9), 1, { w: 6, noTip: true }); hatch(x, base - h * p, 220, h * p, 1, 18, 90 + i * 11); }
+    write(lab.fmt(v), x + 110, base - h - 30, 96, (t - c - .7) / .4, { align: 'center' }); write(l, x + 110, base + 80, 56, (t - c) / .4, { align: 'center' }); });
+}
+function s5(lt, t) { // average originality 2.9 vs 3.0: basically a tie
+  bars(t, 'Average originality', 'blind judge, 1 to 5', 'NO WALK', 'WALK', 2.9, 3.0, 5, at(17), { step: 1, c1: at(17) + .5, c2: at(18), fmt: v => v.toFixed(1) });
+  const tie = at(19); write('basically a tie', 540, 1340, 78, (t - tie) / .5, { align: 'center' });
+  sketch([circ(540, 1318, 300, 50, Math.PI * .95, Math.PI * 2.1, 9)], (t - tie - .4) / .5, { w: 5 });
+  note(MODELS, 90, 1395, 38, (t - at(17) - 1) / .5, { a: .7 });
+}
+function s6(lt, t) { // one-of-a-kind ideas: 22 vs 36
+  const cue = at(20); write('One-of-a-kind ideas', 90, 300, 80, (t - cue) / .6); note('show up only once in all 20 runs', 92, 360, 40, (t - cue - .3) / .4, { a: .75 });
+  const base = 1120, gap = 44, cols = 6;
+  [['NO WALK', 22, 160], ['WALK', 36, 600]].forEach(([l, n, x0], i) => {
+    for (let k = 0; k < n; k++) { const r = Math.floor(k / cols), c = k % cols, p = (t - cue - .5 - k * .045) / .2; if (p <= 0) continue;
+      const x = x0 + 22 + c * gap, y = base - 22 - r * gap; sketch([circ(x, y, 14, 14, hash(k, i) * 6, Math.PI * 2.1, k + i * 50)], p, { w: 5, noTip: true }); }
+    sketch([ln(x0 - 10, base + 6, x0 + cols * gap + 10, base + 6, 2, i)], (t - cue - .2) / .4, { w: 6 });
+    write(l, x0 + cols * gap / 2, base + 82, 56, (t - cue - .2) / .4, { align: 'center' });
+    const top = base - Math.ceil(n / cols) * gap; write(String(n), x0 + cols * gap / 2, top - 30, 110, (t - at(21) - i * .5) / .4, { align: 'center' }); });
+  note('same idea = text-embedding match (nomic-embed-text, cutoff 0.88)', 90, 1300, 34, (t - at(21) - 1) / .5, { a: .7 });
+  note(MODELS, 90, 1395, 38, (t - at(21) - 1.2) / .5, { a: .7 });
+}
+function s7(lt, t, t1) { // takeaway
+  const a = at(22); note("A walk didn't make my AI", 90, 340, 64, (t - a) / .7, { a: .85 }); note('more original.', 90, 420, 64, (t - a - .9) / .5, { a: .85 });
+  const b = at(23); write('It made it', 90, 640, 120, (t - b) / .4); write('repeat itself', 90, 790, 150, (t - b - .35) / .5); write('less.', 90, 950, 150, (t - b - .9) / .4);
+  sketch([ln(90, 990, 520, 980, 4, 3)], (t - b - 1.3) / .4, { w: 8 });
+  sketch([ln(60, 1330, 1000, 1336, 3, 2)], (t - a) / .6, { w: 5, a: .6 });
+  const x = lerp(160, 760, clamp((t - a) / (DUR - a))); tac(x, 1322, .5, { p: (t - a - .2) / .8, walk: (t - a) * 7, look: [.6, 0] });
+}
+const FN = [s1, s2, s3, s4, s5, s6, s7];
+
+
+/* ---------- captions (white text, dark pill) ---------- */
+const CAP_ON = !new URLSearchParams(location.search).has('nocaps');
+function captions(t) {
+  if (!CAP_ON) return; const c = CAPS.find((c, i) => t >= c[1] && t < Math.max(c[2] + .25, (CAPS[i + 1] || [0, 1e9])[1] - .02) && t < c[2] + .7); if (!c) return;
+  ctx.save(); ctx.font = `700 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const words = c[0].split(' '), lines = []; let cur = '';
+  for (const w of words) { const tr = cur ? cur + ' ' + w : w; if (ctx.measureText(tr).width > 820 && cur) { lines.push(cur); cur = w; } else cur = tr; } lines.push(cur);
+  const lh = 60, h = lines.length * lh + 34, w = Math.max(...lines.map(l => ctx.measureText(l).width)) + 64, y0 = 1520 - h / 2;
+  ctx.fillStyle = 'rgba(8,8,8,.82)'; ctx.beginPath(); ctx.roundRect(540 - w / 2, y0, w, h, 28); ctx.fill();
+  ctx.fillStyle = '#ffffff'; lines.forEach((l, i) => ctx.fillText(l, 540, y0 + 17 + lh / 2 + i * lh)); ctx.restore();
+}
+function draw(traw) {
+  const t = warp(traw); T = t; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(BOARD, 0, 0);
+  const i = sceneAt(t), t0 = SCENES[i], t1 = SCENES[i + 1] ?? 1e9;
+  lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.clearRect(0, 0, W, H); FN[i](t - t0, t, t1);
+  lx.save(); lx.globalCompositeOperation = 'destination-out'; lx.drawImage(GRAIN, 0, 0); lx.restore();   // chalk grain
+  const out = t1 < 1e9 ? clamp((t - (t1 - .22)) / .22) : 0;                                              // eraser fade out
+  ctx.globalAlpha = 1 - out; ctx.drawImage(L, 0, 0); ctx.globalAlpha = 1;
+  const wipe = clamp((t - t0) / .35); if (i > 0 && wipe < 1) {                                           // eraser swipe in
+    ctx.save(); ctx.globalAlpha = .07 * (1 - wipe); ctx.fillStyle = C.chalk; ctx.fillRect(0, wipe * H - 260, W, 260); ctx.restore(); }
+  captions(t);
+}
+
+/* ---------- player + optional voice.mp3 in sync ---------- */
+const q = new URLSearchParams(location.search); if (q.has('clean')) document.body.classList.add('clean');
+let t = q.has('t') ? clamp(+q.get('t'), 0, DUR - .001) : 0, playing = !q.has('t'), prev = null;
+const au = new Audio('voice.mp3'); let auOK = false; au.addEventListener('canplay', () => { auOK = true; }); au.addEventListener('error', () => { auOK = false; });
+const bar = document.getElementById('bar'), fillEl = document.getElementById('fill'), info = document.getElementById('info');
+SCENES.slice(1).forEach(b => { const e = document.createElement('i'); e.className = 'tick'; e.style.left = (b / DUR * 100) + '%'; bar.appendChild(e); });
+function syncAudio() { if (!auOK) return; if (playing) { if (au.paused) { au.currentTime = t; au.play().catch(() => {}); } else if (Math.abs(au.currentTime - t) > .15) au.currentTime = t; } else if (!au.paused) au.pause(); }
+function frame(now) {
+  if (playing && prev !== null) { t += Math.min(.1, (now - prev) / 1000); if (t >= DUR) { t = 0; if (auOK) au.currentTime = 0; } }
+  prev = now; draw(t); syncAudio(); fillEl.style.width = (t / DUR * 100) + '%';
+  info.textContent = `${TITLE} · ${t.toFixed(1)} / ${DUR}s${auOK ? ' · voice.mp3 ✓' : ' · no voice.mp3'}${playing ? '' : ' · paused'}`;
+  requestAnimationFrame(frame);
+}
+addEventListener('keydown', e => { const k = e.key.toLowerCase(), i = sceneAt(t);
+  if (k === ' ') { playing = !playing; e.preventDefault(); } else if (k === 'r') { t = 0; playing = true; if (auOK) au.currentTime = 0; }
+  else if (k === 'arrowright') t = SCENES[Math.min(SCENES.length - 1, i + 1)]; else if (k === 'arrowleft') t = SCENES[t - SCENES[i] > .3 ? i : Math.max(0, i - 1)];
+  else if (k === 'h') document.body.classList.toggle('clean');
+  else if (k === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); });
+bar.onclick = e => { const r = bar.getBoundingClientRect(); t = clamp((e.clientX - r.left) / r.width) * DUR * .9999; };
+cv.onclick = () => { playing = !playing; };
+window.seek = s => { t = s; playing = false; draw(t); };
+Promise.race([Promise.all(['700 64px "Cabin Sketch"', '400 40px "Patrick Hand"', '700 46px Inter'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 1500))]).finally(() => requestAnimationFrame(frame));
+</script>
+</body>
+</html>

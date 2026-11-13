@@ -12,7 +12,7 @@ attach and clone the repo first.
 
 | Folder | What is in it |
 |---|---|
-| `styles/` | One finished Short per style (`riso`, `papercut`, `kinetic`, `crt`). Each is a single HTML file with a matching `.chunks.txt`. Copy the closest one to start. |
+| `styles/` | One finished Short per style (`riso`, `papercut`, `kinetic`, `crt`, `chalkboard`). Each is a single HTML file with a matching `.chunks.txt`. Copy the closest one to start. |
 | `../tacdel-motion/tools/voice.py` | The voice: one `eleven_v4` take with the final settings and word timings, checked by `pick_take.py`. |
 | `tools/timing.py` | Turns ElevenLabs word timings into captions, or re-times a finished Short to a new take. |
 | `tools/sheet.cjs` | Makes one contact sheet of chosen moments, for checking layout. |
@@ -97,6 +97,7 @@ the run count on screen whenever results are shown. Paste `../tacdel-motion/tool
 | `papercut.html` | cut paper, tape, yarn, ransom letters, 12 fps | a concept, costs, "receipts" |
 | `kinetic.html` | the words are the visuals; black, paper and electric blue | model releases, number stories |
 | `crt.html` | green phosphor terminal, scanlines, curved glass | tools, logs, CLI and dev stories |
+| `chalkboard.html` | black board, white chalk lines that draw themselves on, hand-sketched, black and white only; Tac in chalk, quick sketches, hatched chalk charts | experiments, "I tried X" stories, simple results charts. Skip the VHS proof beat (it clashes); put the model names and run count on the chart instead |
 
 Styles are still being tested. Compare "viewed vs. swiped away" per style in YouTube Studio after 48 hours,
 then settle on one house look. To add a style, copy any example, swap its palette and helper section, and
