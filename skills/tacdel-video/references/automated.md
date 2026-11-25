@@ -97,6 +97,9 @@ captions below, a "full video" end card. One Short should be the cold open's pay
   not a label, the brand lettering and pill badge), each a different idea for Test & Compare.
   Claude Code never renders thumbnails itself. The owner makes them in ChatGPT; Claude Code
   checks any number or claim on them against the results when they're dropped into `thumbnails/`.
+- **POST.md** last: the one file to schedule from (title, description, chapters, thumbnail file
+  names, video file names, the Shorts' titles and captions, empty `Schedule:` lines). See
+  "Deliver: POST.md" in SKILL.md.
 
 ## Operating lessons
 

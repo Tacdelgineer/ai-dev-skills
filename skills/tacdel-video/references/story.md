@@ -94,6 +94,10 @@ moment they saw.
 > Ask your agent what it checked that correction against. Two: cap the bet size. Three: race
 > any agent against a dumb bot before you trust it."
 
+**Also (SKILL.md hard rules 14–17):** the premise is clear by about 12 seconds; the narration
+sounds like telling a friend a story; the hook line is true on its own, even cut out of the video;
+on-screen labels use plain words.
+
 **9. End on this video, never the next one.** The last line is the payoff, the takeaway, or
 a short question to the viewer about this video. Never tease, promote or advertise another
 episode or video: no "next time...", "in my next video...", "subscribe to see...".

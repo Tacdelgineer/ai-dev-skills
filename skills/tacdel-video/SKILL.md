@@ -66,6 +66,15 @@ charts `results/filmpack/*.png`. Footage and mp4s stay out of git.
 11. **Credit** borrowed styles, skills, data and libraries in the description and README.
 12. **The live page (gh-pages) is published** only when the prompt explicitly allows it.
 13. **Visuals over data:** one number per shot, every number gets a picture, charts and stat cards at most ~20% of runtime — see visuals.md.
+14. **The premise is clear by about 12 seconds:** by then a viewer knows what was tested and
+    what's at stake. The payoff comes first (rule 6), the premise right after.
+15. **On-screen labels use plain words:** the words a viewer would say, not file names, variable
+    names, internal codes or jargon (see the plain-word swaps in `story.md`).
+16. **The narration sounds like telling a friend a story:** first person, contractions, short
+    sentences, things happening in order. Not a report or a lecture.
+17. **The hook line must be true on its own:** taken out of the video (as a Short, a quote or a
+    title), it still says nothing the results don't back. No claim that needs a later line to
+    become true.
 
 ## Owner review pack (before any voice is spent)
 
@@ -81,6 +90,21 @@ needs approval, Claude Code writes `video/REVIEW.md`, one page:
 
 No rough cut and no test voicing. ElevenLabs voicing starts only after the owner approves
 REVIEW.md.
+
+## Deliver: POST.md (both modes)
+
+When the video is finished, the folder with the final MP4s (automated: `video/results/final/`) holds
+one `POST.md` with everything needed to schedule or upload, so Alireza and the scheduling bot work
+from that file alone:
+
+- **The long video:** the video file name, the title, the full description (from
+  `packaging/description.txt`), the chapters with timestamps, the thumbnail file names (from
+  `thumbnails/`; write "not made yet" if they're missing) and an empty `Schedule:` line.
+- **Each Short:** its file name, title (under 70 characters), caption (3 hashtags) and an empty
+  `Schedule:` line.
+
+Keep only the final versions in that folder; move anything older (earlier masters, Shorts, post
+text) into `_old/` there, and never delete it.
 
 ## Lessons
 

@@ -52,6 +52,9 @@ asked to "show the games") and the agent-money-trust fakes. In automated mode th
   the whole video (money trust: the bot was always orange). The compared colours keep equal
   brightness and size (Contract: the look), so the colour says *who*, never *who's winning*.
   Write the character → colour table next to the palette before the first scene.
+- **Labels in plain words.** Every label, tag, board heading and stat-card caption uses the
+  words a viewer would say ("plain stack", "try 2"), never file names, variable names or internal
+  codes. Model and engine names are fine.
 - **A visible label on any fake content.** Anything made up for the test (a planted page,
   invented numbers, a made-up company or forum) carries a label in every shot it appears in,
   outside the fake itself, for as long as it's on screen: `fakeLabel()` ("FAKE NUMBERS —

@@ -1,6 +1,6 @@
 ---
 name: tacdel-shorts
-description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~110-word voiceover, voice it in one take of Alireza's ElevenLabs voice (eleven_v4), animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions, plus its post text (titles, thumbnails and extras only when asked). Shorts that report a real test get a real-terminal proof beat. Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
+description: Make a finished vertical tacdel Short or Reel (about 45 s) from a trend item. Check the facts, write a ~110-word voiceover, voice it in one take of Alireza's ElevenLabs voice (eleven_v4), animate code-drawn scenes in one of four styles (riso, paper-cut, kinetic type, CRT terminal) timed to the words, and render a 1080x1920 MP4 with voice and captions, plus a POST.md with its title and caption (more titles, thumbnails and extras only when asked). Shorts that report a real test get a real-terminal proof beat. Use for any new Short or Reel, for re-timing a Short to a new voice take, or for adding a new style.
 ---
 
 # tacdel Shorts
@@ -69,10 +69,14 @@ the run count on screen whenever results are shown. Paste `../tacdel-motion/tool
 7. **Render.** Run `node tools/render.cjs page.html out.mp4 <DUR> voice.mp3`. To leave the voice out, put
    `-` where the MP3 goes. For a version without captions, add `nocaps` as a fifth argument. A 45 s Short
    takes about 10 minutes on 2 CPUs. Run at most 2 renders at once, and render only after the sheet is right.
-8. **Deliver.** `NN_name.mp4` plus `NN_name.txt`: a post caption of 70 words or fewer with the same
-   rounding as the voiceover, how it was tested, and 3 hashtags. Put the voiceover as recorded in your
-   message. Nothing else unless asked: title options, thumbnails, a long description with links and new
-   sound effects are extras. Keep the fact table in the Short's folder as a working file.
+8. **Deliver.** `NN_name.mp4` plus `POST.md` in the Short's folder: everything needed to schedule it in
+   one file, so Alireza and the scheduling bot work from it alone. POST.md holds the title (under 70
+   characters), the caption (70 words or fewer, the same rounding as the voiceover, how it was tested,
+   3 hashtags), the video file name and an empty `Schedule:` line. Keep only the final versions in the
+   folder; move anything older (earlier renders, old post text) into `_old/` there, and never delete it.
+   Put the voiceover as recorded in your message. Nothing else unless asked: more title options,
+   thumbnails, a long description with links and new sound effects are extras. Keep the fact table in
+   the Short's folder as a working file.
 
 **Re-time a finished Short to a new take** (no scene edits): run
 `python3 tools/timing.py warp words.json chunks.txt page.html --write`, then render again.
