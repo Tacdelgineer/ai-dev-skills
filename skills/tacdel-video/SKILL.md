@@ -67,6 +67,21 @@ charts `results/filmpack/*.png`. Footage and mp4s stay out of git.
 12. **The live page (gh-pages) is published** only when the prompt explicitly allows it.
 13. **Visuals over data:** one number per shot, every number gets a picture, charts and stat cards at most ~20% of runtime — see visuals.md.
 
+## Owner review pack (before any voice is spent)
+
+The owner approves a script without reading all of it. With every script version that
+needs approval, Claude Code writes `video/REVIEW.md`, one page:
+
+- the title pick and 2 backups: simple words that are literally true, with stakes and a
+  curiosity gap, never a promise the video doesn't show in its first minute;
+- the first 15 seconds word for word, with what's on screen;
+- one line per chapter: time, what happens, the one moment worth watching;
+- the 3 spots where viewers are most likely to leave, and how the script holds them;
+- every decision as a yes/no question.
+
+No rough cut and no test voicing. ElevenLabs voicing starts only after the owner approves
+REVIEW.md.
+
 ## Lessons
 
 - hedgefly (manual): a script written before the rooms fought the footage; rewriting it as a
